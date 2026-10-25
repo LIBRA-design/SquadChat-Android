@@ -1,0 +1,1 @@
+# SquadChat-Android
