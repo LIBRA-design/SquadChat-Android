@@ -28,6 +28,7 @@ public class MainActivity extends Activity {
     private ProgressBar progressBar;
     private TextView errorText;
     private ValueCallback<Uri[]> filePathCallback;
+    private boolean pageLoadFailed = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +54,12 @@ public class MainActivity extends Activity {
         errorText.setGravity(Gravity.CENTER);
         errorText.setPadding(32, 32, 32, 32);
         errorText.setVisibility(View.GONE);
+        errorText.setOnClickListener(v -> {
+            pageLoadFailed = false;
+            errorText.setVisibility(View.GONE);
+            webView.setVisibility(View.VISIBLE);
+            webView.reload();
+        });
 
         webView = new WebView(this);
 
@@ -65,15 +72,24 @@ public class MainActivity extends Activity {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                pageLoadFailed = false;
+                errorText.setVisibility(View.GONE);
+                webView.setVisibility(View.VISIBLE);
+                progressBar.setVisibility(View.VISIBLE);
+            }
+
+            @Override
             public void onReceivedError(
                 WebView view,
                 WebResourceRequest request,
                 WebResourceError error
             ) {
                 if (request.isForMainFrame()) {
+                    pageLoadFailed = true;
                     errorText.setText(
                         "No internet connection\n\n" +
-                        "Please connect to the internet and try again."
+                        "Please connect to the internet, then tap here to retry."
                     );
                     errorText.setVisibility(View.VISIBLE);
                     webView.setVisibility(View.GONE);
@@ -82,9 +98,11 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                errorText.setVisibility(View.GONE);
-                webView.setVisibility(View.VISIBLE);
                 progressBar.setVisibility(View.GONE);
+                if (!pageLoadFailed) {
+                    errorText.setVisibility(View.GONE);
+                    webView.setVisibility(View.VISIBLE);
+                }
             }
         });
 
