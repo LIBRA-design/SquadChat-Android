@@ -1,6 +1,7 @@
 package com.squadchat.app;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -12,6 +13,7 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceError;
+import android.webkit.JsResult;
 import android.webkit.ValueCallback;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
@@ -32,7 +34,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         FrameLayout layout = new FrameLayout(this);
-        layout.setBackgroundColor(Color.WHITE);
+        layout.setBackgroundColor(Color.rgb(67, 13, 12));
 
         progressBar = new ProgressBar(
             this, null,
@@ -46,8 +48,8 @@ public class MainActivity extends Activity {
             );
 
         errorText = new TextView(this);
-        errorText.setTextColor(Color.BLACK);
-        errorText.setTextSize(16);
+        errorText.setTextColor(Color.rgb(245, 240, 232));
+        errorText.setTextSize(18);
         errorText.setGravity(Gravity.CENTER);
         errorText.setPadding(32, 32, 32, 32);
         errorText.setVisibility(View.GONE);
@@ -70,21 +72,46 @@ public class MainActivity extends Activity {
             ) {
                 if (request.isForMainFrame()) {
                     errorText.setText(
-                        "Unable to load SquadChat.\n\n" +
-                        "Check your internet connection, then reopen the app."
+                        "No internet connection\n\n" +
+                        "Please connect to the internet and try again."
                     );
                     errorText.setVisibility(View.VISIBLE);
+                    webView.setVisibility(View.GONE);
                 }
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 errorText.setVisibility(View.GONE);
+                webView.setVisibility(View.VISIBLE);
                 progressBar.setVisibility(View.GONE);
             }
         });
 
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
+                new AlertDialog.Builder(MainActivity.this)
+                    .setTitle("SquadChat")
+                    .setMessage(message)
+                    .setPositiveButton("Confirm", (dialog, which) -> result.confirm())
+                    .setNegativeButton("Cancel", (dialog, which) -> result.cancel())
+                    .setOnCancelListener(dialog -> result.cancel())
+                    .show();
+                return true;
+            }
+
+            @Override
+            public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
+                new AlertDialog.Builder(MainActivity.this)
+                    .setTitle("SquadChat")
+                    .setMessage(message)
+                    .setPositiveButton("OK", (dialog, which) -> result.confirm())
+                    .setOnCancelListener(dialog -> result.confirm())
+                    .show();
+                return true;
+            }
+
             @Override
             public void onProgressChanged(WebView view, int progress) {
                 progressBar.setProgress(progress);
