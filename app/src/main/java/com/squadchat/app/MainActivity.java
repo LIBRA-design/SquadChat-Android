@@ -53,15 +53,19 @@ public class MainActivity extends Activity {
         errorText.setTextSize(18);
         errorText.setGravity(Gravity.CENTER);
         errorText.setPadding(32, 32, 32, 32);
-        errorText.setVisibility(View.GONE);
+        errorText.setText("Loading SquadChat...\n\nPlease wait.");
+        errorText.setVisibility(View.VISIBLE);
         errorText.setOnClickListener(v -> {
             pageLoadFailed = false;
-            errorText.setVisibility(View.GONE);
-            webView.setVisibility(View.VISIBLE);
+            errorText.setText("Reconnecting to SquadChat...\n\nPlease wait.");
+            errorText.setVisibility(View.VISIBLE);
+            webView.setVisibility(View.GONE);
+            progressBar.setVisibility(View.VISIBLE);
             webView.reload();
         });
 
         webView = new WebView(this);
+        webView.setVisibility(View.GONE);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -74,8 +78,6 @@ public class MainActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 pageLoadFailed = false;
-                errorText.setVisibility(View.GONE);
-                webView.setVisibility(View.VISIBLE);
                 progressBar.setVisibility(View.VISIBLE);
             }
 
