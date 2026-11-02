@@ -1,13 +1,17 @@
 package com.squadchat.app;
 
 import android.app.Activity;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
 import android.graphics.Color;
 import android.view.View;
 import android.webkit.WebView;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebViewClient;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -19,10 +23,13 @@ import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.view.Gravity;
+import org.json.JSONObject;
+import com.google.firebase.messaging.FirebaseMessaging;
 
 public class MainActivity extends Activity {
 
     private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
+    private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 2002;
 
     private WebView webView;
     private ProgressBar progressBar;
@@ -65,6 +72,7 @@ public class MainActivity extends Activity {
         });
 
         webView = new WebView(this);
+        webView.addJavascriptInterface(new FcmBridge(), "SquadChatNative");
         webView.setVisibility(View.GONE);
 
         WebSettings settings = webView.getSettings();
@@ -177,6 +185,53 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             errorText.setText("Unable to start SquadChat: " + e.getMessage());
             errorText.setVisibility(View.VISIBLE);
+        }
+    }
+
+
+    private class FcmBridge {
+        @JavascriptInterface
+        public void requestFcmToken() {
+            runOnUiThread(() -> {
+                if (Build.VERSION.SDK_INT >= 33 &&
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        NOTIFICATION_PERMISSION_REQUEST_CODE
+                    );
+                } else {
+                    sendFcmTokenToWeb();
+                }
+            });
+        }
+    }
+
+    private void sendFcmTokenToWeb() {
+        if (webView == null) return;
+
+        FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
+            if (task.isSuccessful() && webView != null) {
+                String token = task.getResult();
+                String javascript =
+                    "window.onSquadChatFcmToken && window.onSquadChatFcmToken(" +
+                    JSONObject.quote(token) + ")";
+                webView.evaluateJavascript(javascript, null);
+            }
+        });
+    }
+
+    @Override
+    public void onRequestPermissionsResult(
+        int requestCode,
+        String[] permissions,
+        int[] grantResults
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE &&
+            grantResults.length > 0 &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            sendFcmTokenToWeb();
         }
     }
 
