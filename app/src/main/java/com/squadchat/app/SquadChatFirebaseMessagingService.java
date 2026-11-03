@@ -88,7 +88,7 @@ public class SquadChatFirebaseMessagingService extends FirebaseMessagingService 
                 .setPriority(Notification.PRIORITY_HIGH);
         }
 
-        builder.setSmallIcon(R.mipmap.ic_launcher)
+        builder.setSmallIcon(R.drawable.squadchat_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(new Notification.BigTextStyle().bigText(body))
