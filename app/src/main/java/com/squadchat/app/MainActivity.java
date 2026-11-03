@@ -23,6 +23,7 @@ import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.view.Gravity;
+import android.window.OnBackInvokedDispatcher;
 import org.json.JSONObject;
 import com.google.firebase.messaging.FirebaseMessaging;
 
@@ -40,6 +41,15 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Android 13+ uses the predictive Back dispatcher; register explicitly
+        // so Back is handled inside SquadChat instead of finishing the Activity.
+        if (Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                () -> handleBackPress()
+            );
+        }
 
         FrameLayout layout = new FrameLayout(this);
         layout.setBackgroundColor(Color.rgb(67, 13, 12));
@@ -250,13 +260,23 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
     }
 
+    private void handleBackPress() {
+        if (webView == null || webView.getVisibility() != View.VISIBLE) {
+            return;
+        }
+
+        // SquadChat is a single-page app. Send Escape to its existing
+        // navigation handler so it closes dialogs/viewers or returns from
+        // a mobile sub-screen before Android can close the APK.
+        webView.evaluateJavascript(
+            "window.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true, cancelable:true}));",
+            null
+        );
+    }
+
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
+        handleBackPress();
     }
 
     @Override
