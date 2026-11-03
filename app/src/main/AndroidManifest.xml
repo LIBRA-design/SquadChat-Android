@@ -12,6 +12,10 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
 
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/squadchat_notification" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
