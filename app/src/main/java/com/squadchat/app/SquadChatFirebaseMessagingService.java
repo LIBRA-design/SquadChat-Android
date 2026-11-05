@@ -24,6 +24,10 @@ public class SquadChatFirebaseMessagingService extends FirebaseMessagingService 
         super.onNewToken(token);
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         prefs.edit().putString(TOKEN_KEY, token).apply();
+
+        // If the app is currently open, immediately forward the refreshed token
+        // to the authenticated web app so it can update Supabase.
+        MainActivity.deliverFcmToken(token);
     }
 
     @Override
