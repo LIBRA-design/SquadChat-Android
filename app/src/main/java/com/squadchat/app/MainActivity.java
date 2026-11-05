@@ -41,6 +41,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        activeActivity = this;
 
         // Android 13+ uses the predictive Back dispatcher; register explicitly
         // so Back is handled inside SquadChat instead of finishing the Activity.
@@ -199,6 +200,8 @@ public class MainActivity extends Activity {
     }
 
 
+    private static volatile MainActivity activeActivity;
+
     private class FcmBridge {
         @JavascriptInterface
         public void requestFcmToken() {
@@ -209,11 +212,24 @@ public class MainActivity extends Activity {
                         new String[]{Manifest.permission.POST_NOTIFICATIONS},
                         NOTIFICATION_PERMISSION_REQUEST_CODE
                     );
-                } else {
-                    sendFcmTokenToWeb();
                 }
+                // Register the FCM token even when notification permission is denied.
+                // Android may suppress display, but the device token can still be saved.
+                sendFcmTokenToWeb();
             });
         }
+    }
+
+    static void deliverFcmToken(String token) {
+        MainActivity activity = activeActivity;
+        if (activity == null || activity.webView == null) return;
+        activity.webView.post(() -> {
+            if (activity.webView == null) return;
+            String javascript =
+                "window.onSquadChatFcmToken && window.onSquadChatFcmToken(" +
+                JSONObject.quote(token) + ")";
+            activity.webView.evaluateJavascript(javascript, null);
+        });
     }
 
     private void sendFcmTokenToWeb() {
@@ -238,9 +254,9 @@ public class MainActivity extends Activity {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
-        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE &&
-            grantResults.length > 0 &&
-            grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
+            // Permission controls whether Android displays notifications, not whether
+            // Firebase can issue a registration token for this installation.
             sendFcmTokenToWeb();
         }
     }
@@ -281,6 +297,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (activeActivity == this) activeActivity = null;
         if (filePathCallback != null) {
             filePathCallback.onReceiveValue(null);
             filePathCallback = null;
