@@ -2,6 +2,7 @@ package com.squadchat.app;
 
 import android.app.Activity;
 import android.Manifest;
+import android.app.NotificationManager;
 import android.content.pm.PackageManager;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -31,20 +32,25 @@ public class MainActivity extends Activity {
 
     private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
     private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 2002;
+    static final String EXTRA_CONVERSATION_ID = "squadchat_conversation_id";
+    private static final String NOTIFICATION_TAG_PREFIX = "squadchat:";
 
     private WebView webView;
     private ProgressBar progressBar;
     private TextView errorText;
     private ValueCallback<Uri[]> filePathCallback;
     private boolean pageLoadFailed = false;
+    private String pendingConversationId;
+
+    private static volatile MainActivity activeActivity;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         activeActivity = this;
+        pendingConversationId = getIntent() == null ? null :
+            getIntent().getStringExtra(EXTRA_CONVERSATION_ID);
 
-        // Android 13+ uses the predictive Back dispatcher; register explicitly
-        // so Back is handled inside SquadChat instead of finishing the Activity.
         if (Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT,
@@ -55,16 +61,10 @@ public class MainActivity extends Activity {
         FrameLayout layout = new FrameLayout(this);
         layout.setBackgroundColor(Color.rgb(67, 13, 12));
 
-        progressBar = new ProgressBar(
-            this, null,
-            android.R.attr.progressBarStyleHorizontal
+        progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        FrameLayout.LayoutParams barParams = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, 8, Gravity.TOP
         );
-
-        FrameLayout.LayoutParams barParams =
-            new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, 8,
-                Gravity.TOP
-            );
 
         errorText = new TextView(this);
         errorText.setTextColor(Color.rgb(245, 240, 232));
@@ -101,17 +101,10 @@ public class MainActivity extends Activity {
             }
 
             @Override
-            public void onReceivedError(
-                WebView view,
-                WebResourceRequest request,
-                WebResourceError error
-            ) {
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
                     pageLoadFailed = true;
-                    errorText.setText(
-                        "No internet connection\n\n" +
-                        "Please connect to the internet, then tap here to retry."
-                    );
+                    errorText.setText("No internet connection\n\nPlease connect to the internet, then tap here to retry.");
                     errorText.setVisibility(View.VISIBLE);
                     webView.setVisibility(View.GONE);
                 }
@@ -123,6 +116,7 @@ public class MainActivity extends Activity {
                 if (!pageLoadFailed) {
                     errorText.setVisibility(View.GONE);
                     webView.setVisibility(View.VISIBLE);
+                    deliverPendingConversationOpen();
                 }
             }
         });
@@ -131,53 +125,40 @@ public class MainActivity extends Activity {
             @Override
             public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
                 new AlertDialog.Builder(MainActivity.this)
-                    .setTitle("SquadChat")
-                    .setMessage(message)
+                    .setTitle("SquadChat").setMessage(message)
                     .setPositiveButton("Confirm", (dialog, which) -> result.confirm())
                     .setNegativeButton("Cancel", (dialog, which) -> result.cancel())
-                    .setOnCancelListener(dialog -> result.cancel())
-                    .show();
+                    .setOnCancelListener(dialog -> result.cancel()).show();
                 return true;
             }
 
             @Override
             public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
                 new AlertDialog.Builder(MainActivity.this)
-                    .setTitle("SquadChat")
-                    .setMessage(message)
+                    .setTitle("SquadChat").setMessage(message)
                     .setPositiveButton("OK", (dialog, which) -> result.confirm())
-                    .setOnCancelListener(dialog -> result.confirm())
-                    .show();
+                    .setOnCancelListener(dialog -> result.confirm()).show();
                 return true;
             }
 
             @Override
             public void onProgressChanged(WebView view, int progress) {
                 progressBar.setProgress(progress);
-                progressBar.setVisibility(
-                    progress == 100 ? View.GONE : View.VISIBLE
-                );
+                progressBar.setVisibility(progress == 100 ? View.GONE : View.VISIBLE);
             }
 
             @Override
-            public boolean onShowFileChooser(
-                WebView webView,
-                ValueCallback<Uri[]> filePathCallback,
-                FileChooserParams fileChooserParams
-            ) {
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (MainActivity.this.filePathCallback != null) {
                     MainActivity.this.filePathCallback.onReceiveValue(null);
                 }
-
-                MainActivity.this.filePathCallback = filePathCallback;
-
+                MainActivity.this.filePathCallback = callback;
                 try {
-                    Intent intent = fileChooserParams.createIntent();
-                    startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
+                    startActivityForResult(params.createIntent(), FILE_CHOOSER_REQUEST_CODE);
                     return true;
                 } catch (Exception e) {
                     MainActivity.this.filePathCallback = null;
-                    filePathCallback.onReceiveValue(null);
+                    callback.onReceiveValue(null);
                     return false;
                 }
             }
@@ -186,21 +167,36 @@ public class MainActivity extends Activity {
         layout.addView(webView);
         layout.addView(errorText);
         layout.addView(progressBar, barParams);
-
         setContentView(layout);
 
         try {
-            webView.loadUrl(
-                "https://squadchat-ew2b04.v2.appdeploy.ai/"
-            );
+            webView.loadUrl("https://squadchat-ew2b04.v2.appdeploy.ai/");
         } catch (Exception e) {
             errorText.setText("Unable to start SquadChat: " + e.getMessage());
             errorText.setVisibility(View.VISIBLE);
         }
     }
 
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        pendingConversationId = intent == null ? null :
+            intent.getStringExtra(EXTRA_CONVERSATION_ID);
+        deliverPendingConversationOpen();
+    }
 
-    private static volatile MainActivity activeActivity;
+    private void deliverPendingConversationOpen() {
+        if (webView == null || pendingConversationId == null || pendingConversationId.trim().isEmpty()) return;
+        final String conversationId = pendingConversationId;
+        pendingConversationId = null;
+        webView.post(() -> {
+            if (webView == null) return;
+            String javascript = "window.onSquadChatNotificationOpen && window.onSquadChatNotificationOpen(" +
+                JSONObject.quote(conversationId) + ")";
+            webView.evaluateJavascript(javascript, null);
+        });
+    }
 
     private class FcmBridge {
         @JavascriptInterface
@@ -208,15 +204,17 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (Build.VERSION.SDK_INT >= 33 &&
                     checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(
-                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                        NOTIFICATION_PERMISSION_REQUEST_CODE
-                    );
+                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST_CODE);
                 }
-                // Register the FCM token even when notification permission is denied.
-                // Android may suppress display, but the device token can still be saved.
                 sendFcmTokenToWeb();
             });
+        }
+
+        @JavascriptInterface
+        public void clearConversationNotifications(String conversationId) {
+            if (conversationId == null || conversationId.trim().isEmpty()) return;
+            NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (manager != null) manager.cancel(NOTIFICATION_TAG_PREFIX + conversationId, 0);
         }
     }
 
@@ -225,8 +223,7 @@ public class MainActivity extends Activity {
         if (activity == null || activity.webView == null) return;
         activity.webView.post(() -> {
             if (activity.webView == null) return;
-            String javascript =
-                "window.onSquadChatFcmToken && window.onSquadChatFcmToken(" +
+            String javascript = "window.onSquadChatFcmToken && window.onSquadChatFcmToken(" +
                 JSONObject.quote(token) + ")";
             activity.webView.evaluateJavascript(javascript, null);
         });
@@ -234,12 +231,10 @@ public class MainActivity extends Activity {
 
     private void sendFcmTokenToWeb() {
         if (webView == null) return;
-
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
             if (task.isSuccessful() && webView != null) {
                 String token = task.getResult();
-                String javascript =
-                    "window.onSquadChatFcmToken && window.onSquadChatFcmToken(" +
+                String javascript = "window.onSquadChatFcmToken && window.onSquadChatFcmToken(" +
                     JSONObject.quote(token) + ")";
                 webView.evaluateJavascript(javascript, null);
             }
@@ -247,27 +242,16 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    public void onRequestPermissionsResult(
-        int requestCode,
-        String[] permissions,
-        int[] grantResults
-    ) {
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
-            // Permission controls whether Android displays notifications, not whether
-            // Firebase can issue a registration token for this installation.
-            sendFcmTokenToWeb();
-        }
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) sendFcmTokenToWeb();
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
             if (filePathCallback != null) {
-                Uri[] results = WebChromeClient.FileChooserParams.parseResult(
-                    resultCode, data
-                );
+                Uri[] results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
                 filePathCallback.onReceiveValue(results);
                 filePathCallback = null;
             }
@@ -277,13 +261,7 @@ public class MainActivity extends Activity {
     }
 
     private void handleBackPress() {
-        if (webView == null || webView.getVisibility() != View.VISIBLE) {
-            return;
-        }
-
-        // SquadChat is a single-page app. Send Escape to its existing
-        // navigation handler so it closes dialogs/viewers or returns from
-        // a mobile sub-screen before Android can close the APK.
+        if (webView == null || webView.getVisibility() != View.VISIBLE) return;
         webView.evaluateJavascript(
             "window.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true, cancelable:true}));",
             null
@@ -291,9 +269,7 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    public void onBackPressed() {
-        handleBackPress();
-    }
+    public void onBackPressed() { handleBackPress(); }
 
     @Override
     protected void onDestroy() {
