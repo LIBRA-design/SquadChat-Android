@@ -41,6 +41,7 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> filePathCallback;
     private boolean pageLoadFailed = false;
     private String pendingConversationId;
+    private int pendingDeliveryAttempts = 0;
 
     private static volatile MainActivity activeActivity;
 
@@ -183,18 +184,26 @@ public class MainActivity extends Activity {
         setIntent(intent);
         pendingConversationId = intent == null ? null :
             intent.getStringExtra(EXTRA_CONVERSATION_ID);
+        pendingDeliveryAttempts = 0;
         deliverPendingConversationOpen();
     }
 
     private void deliverPendingConversationOpen() {
         if (webView == null || pendingConversationId == null || pendingConversationId.trim().isEmpty()) return;
         final String conversationId = pendingConversationId;
-        pendingConversationId = null;
         webView.post(() -> {
-            if (webView == null) return;
-            String javascript = "window.onSquadChatNotificationOpen && window.onSquadChatNotificationOpen(" +
-                JSONObject.quote(conversationId) + ")";
-            webView.evaluateJavascript(javascript, null);
+            if (webView == null || pendingConversationId == null) return;
+            String javascript = "(function(){ if (typeof window.onSquadChatNotificationOpen !== 'function') return false; " +
+                "window.onSquadChatNotificationOpen(" + JSONObject.quote(conversationId) + "); return true; })()";
+            webView.evaluateJavascript(javascript, value -> {
+                if ("true".equals(value)) {
+                    pendingConversationId = null;
+                    pendingDeliveryAttempts = 0;
+                } else if (pendingDeliveryAttempts < 40 && webView != null) {
+                    pendingDeliveryAttempts++;
+                    webView.postDelayed(this::deliverPendingConversationOpen, 250);
+                }
+            });
         });
     }
 
