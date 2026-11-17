@@ -55,10 +55,13 @@ public class SquadChatFirebaseMessagingService extends FirebaseMessagingService 
             }
         }
 
-        showNotification(title, body);
+        String conversationId = remoteMessage.getData() == null
+            ? ""
+            : remoteMessage.getData().getOrDefault("conversation_id", "");
+        showNotification(title, body, conversationId);
     }
 
-    private void showNotification(String title, String body) {
+    private void showNotification(String title, String body, String conversationId) {
         NotificationManager manager =
             (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
 
@@ -77,9 +80,14 @@ public class SquadChatFirebaseMessagingService extends FirebaseMessagingService 
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
+        Intent intentWithConversation = intent;
+        if (conversationId != null && !conversationId.isEmpty()) {
+            intentWithConversation.putExtra("conversation_id", conversationId);
+        }
+
         PendingIntent pendingIntent = PendingIntent.getActivity(
             this,
-            0,
+            conversationId == null ? 0 : conversationId.hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
@@ -99,6 +107,12 @@ public class SquadChatFirebaseMessagingService extends FirebaseMessagingService 
             .setAutoCancel(true)
             .setContentIntent(pendingIntent);
 
-        manager.notify((int) (System.currentTimeMillis() & 0x7fffffff), builder.build());
+        if (conversationId != null && !conversationId.isEmpty()) {
+            // One replaceable notification per conversation; the native bridge can
+            // reliably cancel it when that conversation is opened from the app icon.
+            manager.notify(conversationId, 0, builder.build());
+        } else {
+            manager.notify((int) (System.currentTimeMillis() & 0x7fffffff), builder.build());
+        }
     }
 }
