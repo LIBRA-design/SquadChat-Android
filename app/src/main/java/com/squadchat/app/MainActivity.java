@@ -4,10 +4,12 @@ import android.app.Activity;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.app.AlertDialog;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
+import android.os.Environment;
 import android.graphics.Color;
 import android.view.View;
 import android.webkit.WebView;
@@ -19,6 +21,11 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceError;
 import android.webkit.JsResult;
 import android.webkit.ValueCallback;
+import android.provider.MediaStore;
+import android.util.Base64;
+import java.io.OutputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -202,7 +209,65 @@ public class MainActivity extends Activity {
 
     private static volatile MainActivity activeActivity;
 
+    private final ExecutorService imageSaveExecutor = Executors.newSingleThreadExecutor();
+
+    private void reportImageSave(boolean success, String message) {
+        if (webView == null) return;
+        String javascript = "window.onSquadChatImageSaved && window.onSquadChatImageSaved(" +
+            success + "," + JSONObject.quote(message) + ")";
+        webView.post(() -> {
+            if (webView != null) webView.evaluateJavascript(javascript, null);
+        });
+    }
+
     private class FcmBridge {
+        @JavascriptInterface
+        public void saveImage(String base64Data, String mimeType, String fileName) {
+            if (Build.VERSION.SDK_INT < 29) {
+                reportImageSave(false, "Saving to Gallery requires Android 10 or newer.");
+                return;
+            }
+            if (base64Data == null || base64Data.isEmpty() || base64Data.length() > 36_000_000) {
+                reportImageSave(false, "The image is empty or too large to save.");
+                return;
+            }
+            imageSaveExecutor.execute(() -> {
+                Uri savedUri = null;
+                try {
+                    byte[] imageBytes = Base64.decode(base64Data, Base64.DEFAULT);
+                    if (imageBytes.length == 0 || imageBytes.length > 25 * 1024 * 1024) {
+                        throw new IllegalArgumentException("Image exceeds the 25 MB save limit.");
+                    }
+                    String safeName = (fileName == null || fileName.trim().isEmpty())
+                        ? "SquadChat-" + System.currentTimeMillis() + ".jpg"
+                        : fileName.replaceAll("[^A-Za-z0-9._-]", "_");
+                    String safeMime = (mimeType == null || !mimeType.startsWith("image/"))
+                        ? "image/jpeg" : mimeType;
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Images.Media.DISPLAY_NAME, safeName);
+                    values.put(MediaStore.Images.Media.MIME_TYPE, safeMime);
+                    values.put(MediaStore.Images.Media.RELATIVE_PATH,
+                        Environment.DIRECTORY_PICTURES + "/SquadChat");
+                    values.put(MediaStore.Images.Media.IS_PENDING, 1);
+                    savedUri = getContentResolver().insert(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                    if (savedUri == null) throw new IllegalStateException("Android could not create the image file.");
+                    try (OutputStream output = getContentResolver().openOutputStream(savedUri)) {
+                        if (output == null) throw new IllegalStateException("Could not open the image file.");
+                        output.write(imageBytes);
+                        output.flush();
+                    }
+                    ContentValues ready = new ContentValues();
+                    ready.put(MediaStore.Images.Media.IS_PENDING, 0);
+                    getContentResolver().update(savedUri, ready, null, null);
+                    reportImageSave(true, "Saved to Pictures/SquadChat");
+                } catch (Exception e) {
+                    if (savedUri != null) getContentResolver().delete(savedUri, null, null);
+                    reportImageSave(false, e.getMessage() == null ? "Android could not save this image." : e.getMessage());
+                }
+            });
+        }
+
         @JavascriptInterface
         public void requestFcmToken() {
             runOnUiThread(() -> {
