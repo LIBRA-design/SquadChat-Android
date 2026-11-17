@@ -1,6 +1,8 @@
 package com.squadchat.app;
 
 import android.app.Activity;
+import android.app.NotificationManager;
+import android.content.Context;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.app.AlertDialog;
@@ -266,6 +268,18 @@ public class MainActivity extends Activity {
                     reportImageSave(false, e.getMessage() == null ? "Android could not save this image." : e.getMessage());
                 }
             });
+        }
+
+        @JavascriptInterface
+        public void clearConversationNotifications(String conversationId) {
+            if (conversationId == null || conversationId.trim().isEmpty()) return;
+            NotificationManager manager =
+                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager != null) {
+                // The FCM service uses the conversation UUID as the notification tag.
+                // This clears only this conversation and leaves other chat alerts intact.
+                manager.cancel(conversationId, 0);
+            }
         }
 
         @JavascriptInterface
