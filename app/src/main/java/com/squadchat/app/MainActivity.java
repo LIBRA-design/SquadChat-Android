@@ -8,6 +8,29 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.app.AlertDialog;
 import android.content.ContentValues;
+import android.content.ContentUris;
+import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.ImageDecoder;
+import android.graphics.drawable.GradientDrawable;
+import android.provider.OpenableColumns;
+import android.widget.Button;
+import android.widget.GridView;
+import android.widget.BaseAdapter;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.FrameLayout;
+import android.widget.Toast;
+import android.view.Window;
+import android.view.WindowManager;
+import android.view.ViewGroup;
+import android.widget.AbsListView;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -59,6 +82,8 @@ public class MainActivity extends Activity {
 
     private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
     private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 2002;
+    private static final int PHOTO_PERMISSION_REQUEST_CODE = 3003;
+    private Runnable pendingPhotoGallery;
 
     private WebView webView;
     private ProgressBar progressBar;
@@ -318,7 +343,260 @@ public class MainActivity extends Activity {
         });
     }
 
+    private static class GalleryPhoto {
+        final Uri uri;
+        final String name;
+        GalleryPhoto(Uri uri, String name) { this.uri = uri; this.name = name; }
+    }
+
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private GradientDrawable roundedBackground(int color, int radiusDp) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(color);
+        shape.setCornerRadius(dp(radiusDp));
+        return shape;
+    }
+
+    private void openPhotoGallery() {
+        if (Build.VERSION.SDK_INT >= 34) {
+            boolean full = checkSelfPermission("android.permission.READ_MEDIA_IMAGES") == PackageManager.PERMISSION_GRANTED;
+            boolean selected = checkSelfPermission("android.permission.READ_MEDIA_VISUAL_USER_SELECTED") == PackageManager.PERMISSION_GRANTED;
+            if (!full && !selected) {
+                pendingPhotoGallery = this::showPhotoGallery;
+                requestPermissions(new String[]{"android.permission.READ_MEDIA_IMAGES", "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"}, PHOTO_PERMISSION_REQUEST_CODE);
+                return;
+            }
+        } else if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission("android.permission.READ_MEDIA_IMAGES") != PackageManager.PERMISSION_GRANTED) {
+                pendingPhotoGallery = this::showPhotoGallery;
+                requestPermissions(new String[]{"android.permission.READ_MEDIA_IMAGES"}, PHOTO_PERMISSION_REQUEST_CODE);
+                return;
+            }
+        } else if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            pendingPhotoGallery = this::showPhotoGallery;
+            requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, PHOTO_PERMISSION_REQUEST_CODE);
+            return;
+        }
+        showPhotoGallery();
+    }
+
+    private List<GalleryPhoto> loadGalleryPhotos() {
+        List<GalleryPhoto> photos = new ArrayList<>();
+        Uri collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+        String[] projection = {MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME};
+        try (Cursor cursor = getContentResolver().query(collection, projection, null, null, MediaStore.Images.Media.DATE_ADDED + " DESC")) {
+            if (cursor != null) {
+                int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID);
+                int nameColumn = cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME);
+                while (cursor.moveToNext() && photos.size() < 300) {
+                    long id = cursor.getLong(idColumn);
+                    String name = nameColumn >= 0 ? cursor.getString(nameColumn) : "Photo";
+                    photos.add(new GalleryPhoto(ContentUris.withAppendedId(collection, id), name == null ? "Photo" : name));
+                }
+            }
+        } catch (Exception ignored) {}
+        return photos;
+    }
+
+    private void showPhotoGallery() {
+        List<GalleryPhoto> photos = loadGalleryPhotos();
+        if (photos.isEmpty()) {
+            Toast.makeText(this, "No accessible photos found. Check SquadChat photo permission in Settings.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        DialogHolder holder = new DialogHolder();
+        android.app.Dialog dialog = new android.app.Dialog(this);
+        holder.dialog = dialog;
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(12), dp(12), dp(12), dp(12));
+        panel.setBackground(roundedBackground(Color.rgb(20, 12, 14), 22));
+
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title = new TextView(this);
+        title.setText("All photos");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(18);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        header.addView(title, new LinearLayout.LayoutParams(0, dp(48), 1));
+        TextView close = new TextView(this);
+        close.setText("×");
+        close.setTextColor(Color.WHITE);
+        close.setTextSize(28);
+        close.setGravity(Gravity.CENTER);
+        header.addView(close, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        panel.addView(header);
+
+        GridView grid = new GridView(this);
+        grid.setNumColumns(3);
+        grid.setHorizontalSpacing(dp(3));
+        grid.setVerticalSpacing(dp(3));
+        grid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
+        grid.setSelector(android.R.color.transparent);
+        LinearLayout.LayoutParams gridParams = new LinearLayout.LayoutParams(-1, 0, 1);
+        gridParams.topMargin = dp(8);
+        panel.addView(grid, gridParams);
+
+        Button send = new Button(this);
+        send.setText("Send photos");
+        send.setTextColor(Color.rgb(40, 18, 20));
+        send.setTextSize(16);
+        send.setAllCaps(false);
+        send.setTypeface(null, android.graphics.Typeface.BOLD);
+        send.setBackground(roundedBackground(Color.rgb(224, 177, 105), 28));
+        LinearLayout.LayoutParams sendParams = new LinearLayout.LayoutParams(-1, dp(54));
+        sendParams.topMargin = dp(10);
+        panel.addView(send, sendParams);
+
+        LinkedHashSet<Uri> selected = new LinkedHashSet<>();
+        BaseAdapter adapter = new BaseAdapter() {
+            @Override public int getCount() { return photos.size(); }
+            @Override public Object getItem(int position) { return photos.get(position); }
+            @Override public long getItemId(int position) { return position; }
+            @Override public View getView(int position, View convertView, ViewGroup parent) {
+                FrameLayout cell = convertView instanceof FrameLayout ? (FrameLayout) convertView : new FrameLayout(MainActivity.this);
+                cell.setLayoutParams(new AbsListView.LayoutParams(-1, dp(116)));
+                ImageView image = cell.getChildCount() > 0 && cell.getChildAt(0) instanceof ImageView ? (ImageView) cell.getChildAt(0) : new ImageView(MainActivity.this);
+                image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                if (image.getParent() == null) cell.addView(image, new FrameLayout.LayoutParams(-1, -1));
+                GalleryPhoto photo = photos.get(position);
+                image.setImageURI(photo.uri);
+                TextView number = cell.getChildCount() > 1 && cell.getChildAt(1) instanceof TextView ? (TextView) cell.getChildAt(1) : new TextView(MainActivity.this);
+                number.setGravity(Gravity.CENTER);
+                number.setTextColor(Color.WHITE);
+                number.setTextSize(13);
+                number.setTypeface(null, android.graphics.Typeface.BOLD);
+                FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(dp(28), dp(28), Gravity.TOP | Gravity.RIGHT);
+                badgeParams.setMargins(0, dp(5), dp(5), 0);
+                if (number.getParent() == null) cell.addView(number, badgeParams);
+                int selectedIndex = new ArrayList<>(selected).indexOf(photo.uri);
+                number.setText(selectedIndex >= 0 ? String.valueOf(selectedIndex + 1) : "");
+                number.setBackground(selectedIndex >= 0 ? roundedBackground(Color.rgb(225, 91, 115), 20) : roundedBackground(0x66000000, 20));
+                cell.setForeground(roundedBackground(selectedIndex >= 0 ? 0x337FFFFFF : 0x00000000, 8));
+                return cell;
+            }
+        };
+        grid.setAdapter(adapter);
+        grid.setOnItemClickListener((parent, view, position, id) -> {
+            Uri uri = photos.get(position).uri;
+            if (selected.contains(uri)) selected.remove(uri);
+            else if (selected.size() < 10) selected.add(uri);
+            else Toast.makeText(this, "Choose up to 10 photos.", Toast.LENGTH_SHORT).show();
+            send.setText(selected.isEmpty() ? "Select photos" : "Send " + selected.size());
+            send.setEnabled(!selected.isEmpty());
+            adapter.notifyDataSetChanged();
+        });
+        send.setEnabled(false);
+        close.setOnClickListener(v -> dialog.dismiss());
+        send.setOnClickListener(v -> {
+            if (selected.isEmpty()) return;
+            send.setEnabled(false);
+            send.setText("Preparing photos…");
+            List<GalleryPhoto> chosen = new ArrayList<>();
+            for (GalleryPhoto photo : photos) if (selected.contains(photo.uri)) chosen.add(photo);
+            new Thread(() -> {
+                try {
+                    org.json.JSONArray array = new org.json.JSONArray();
+                    for (GalleryPhoto photo : chosen) {
+                        Bitmap bitmap = decodeGalleryBitmap(photo.uri);
+                        if (bitmap == null) throw new IllegalStateException("Could not read " + photo.name);
+                        ByteArrayOutputStream output = new ByteArrayOutputStream();
+                        int quality = 82;
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output);
+                        while (output.size() > 4_500_000 && quality > 45) {
+                            output.reset();
+                            quality -= 8;
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output);
+                        }
+                        bitmap.recycle();
+                        if (output.size() > 4_500_000) throw new IllegalStateException("A selected photo is too large to prepare.");
+                        JSONObject item = new JSONObject();
+                        item.put("name", photo.name.replaceAll("[^A-Za-z0-9._-]", "_") + ".jpg");
+                        item.put("type", "image/jpeg");
+                        item.put("data", Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP));
+                        array.put(item);
+                    }
+                    String payload = array.toString();
+                    runOnUiThread(() -> {
+                        dialog.dismiss();
+                        if (webView != null) webView.evaluateJavascript("window.onSquadChatNativePhotosSelected && window.onSquadChatNativePhotosSelected(" + JSONObject.quote(payload) + ")", null);
+                    });
+                } catch (Exception error) {
+                    runOnUiThread(() -> {
+                        send.setEnabled(true);
+                        send.setText("Try again");
+                        Toast.makeText(this, "Could not prepare selected photos: " + error.getMessage(), Toast.LENGTH_LONG).show();
+                    });
+                }
+            }).start();
+        });
+
+        dialog.setContentView(panel);
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawableResource(android.R.color.transparent);
+            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            WindowManager.LayoutParams params = window.getAttributes();
+            params.gravity = Gravity.BOTTOM;
+            params.width = WindowManager.LayoutParams.MATCH_PARENT;
+            params.height = Math.round(getResources().getDisplayMetrics().heightPixels * 0.72f);
+            params.dimAmount = 0.55f;
+            window.setAttributes(params);
+        }
+        dialog.show();
+        if (window != null) {
+            window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, Math.round(getResources().getDisplayMetrics().heightPixels * 0.72f));
+            window.setBackgroundDrawableResource(android.R.color.transparent);
+        }
+    }
+
+    private static class DialogHolder { android.app.Dialog dialog; }
+
+    private Bitmap decodeGalleryBitmap(Uri uri) throws Exception {
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        try (InputStream input = getContentResolver().openInputStream(uri)) {
+            BitmapFactory.decodeStream(input, null, bounds);
+        }
+        int sample = 1;
+        while (Math.max(bounds.outWidth / sample, bounds.outHeight / sample) > 1800) sample *= 2;
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inSampleSize = sample;
+        try (InputStream input = getContentResolver().openInputStream(uri)) {
+            Bitmap bitmap = BitmapFactory.decodeStream(input, null, options);
+            if (bitmap == null) return null;
+            int max = 1800;
+            int width = bitmap.getWidth(), height = bitmap.getHeight();
+            float scale = Math.min(1f, (float) max / Math.max(width, height));
+            if (scale < 1f) {
+                Bitmap scaled = Bitmap.createScaledBitmap(bitmap, Math.round(width * scale), Math.round(height * scale), true);
+                bitmap.recycle();
+                return scaled;
+            }
+            return bitmap;
+        }
+    }
+
+    private void deliverPhotoPermissionResult(int[] grantResults) {
+        Runnable pending = pendingPhotoGallery;
+        pendingPhotoGallery = null;
+        if (pending == null) return;
+        boolean granted = false;
+        for (int result : grantResults) if (result == PackageManager.PERMISSION_GRANTED) granted = true;
+        if (granted) pending.run();
+        else Toast.makeText(this, "SquadChat needs photo access to show your gallery.", Toast.LENGTH_LONG).show();
+    }
+
     private class FcmBridge {
+        @JavascriptInterface
+        public void openPhotoGallery() {
+            runOnUiThread(() -> MainActivity.this.openPhotoGallery());
+        }
+
         @JavascriptInterface
         public void saveImage(String base64Data, String mimeType, String fileName) {
             if (Build.VERSION.SDK_INT < 29) {
@@ -453,9 +731,9 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
         if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
-            // Permission controls whether Android displays notifications, not whether
-            // Firebase can issue a registration token for this installation.
             sendFcmTokenToWeb();
+        } else if (requestCode == PHOTO_PERMISSION_REQUEST_CODE) {
+            deliverPhotoPermissionResult(grantResults);
         }
     }
 
