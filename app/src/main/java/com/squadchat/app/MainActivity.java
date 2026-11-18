@@ -147,7 +147,9 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         // SquadChat is HTTPS-only; do not allow local files or mixed HTTP content.
         settings.setAllowFileAccess(false);
-        settings.setAllowContentAccess(false);
+        // Required for WebView to read the content:// URIs returned by the
+        // in-app MediaStore gallery through the file chooser callback.
+        settings.setAllowContentAccess(true);
         settings.setAllowFileAccessFromFileURLs(false);
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -285,25 +287,10 @@ public class MainActivity extends Activity {
                 MainActivity.this.filePathCallback = filePathCallback;
 
                 try {
-                    Intent intent;
-                    if (Build.VERSION.SDK_INT >= 33) {
-                        // Android Photo Picker: a native, privacy-preserving photo gallery
-                        // that appears as the system's bottom-sheet picker on supported devices.
-                        // It returns content URIs directly to WebView without broad media access.
-                        intent = new Intent(MediaStore.ACTION_PICK_IMAGES);
-                        intent.setType("image/*");
-                        if (Build.VERSION.SDK_INT >= 34) {
-                            intent.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, 10);
-                        }
-                    } else {
-                        // Android 12 and older use the system document picker with multi-select.
-                        intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                        intent.addCategory(Intent.CATEGORY_OPENABLE);
-                        intent.setType("image/*");
-                        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-                    }
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
+                    // Route the HTML file input to SquadChat's own bottom-sheet gallery.
+                    // The gallery returns selected content:// URIs through this callback,
+                    // allowing WebView to create normal File objects without Base64 IPC.
+                    MainActivity.this.openPhotoGallery();
                     return true;
                 } catch (Exception e) {
                     MainActivity.this.filePathCallback = null;
@@ -491,48 +478,19 @@ public class MainActivity extends Activity {
             adapter.notifyDataSetChanged();
         });
         send.setEnabled(false);
-        close.setOnClickListener(v -> dialog.dismiss());
+        close.setOnClickListener(v -> {
+            dialog.dismiss();
+            completePhotoFileChooser(null);
+        });
+        dialog.setOnCancelListener(ignored -> completePhotoFileChooser(null));
         send.setOnClickListener(v -> {
             if (selected.isEmpty()) return;
-            send.setEnabled(false);
-            send.setText("Preparing photos…");
-            List<GalleryPhoto> chosen = new ArrayList<>();
-            for (GalleryPhoto photo : photos) if (selected.contains(photo.uri)) chosen.add(photo);
-            new Thread(() -> {
-                try {
-                    org.json.JSONArray array = new org.json.JSONArray();
-                    for (GalleryPhoto photo : chosen) {
-                        Bitmap bitmap = decodeGalleryBitmap(photo.uri);
-                        if (bitmap == null) throw new IllegalStateException("Could not read " + photo.name);
-                        ByteArrayOutputStream output = new ByteArrayOutputStream();
-                        int quality = 82;
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output);
-                        while (output.size() > 4_500_000 && quality > 45) {
-                            output.reset();
-                            quality -= 8;
-                            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output);
-                        }
-                        bitmap.recycle();
-                        if (output.size() > 4_500_000) throw new IllegalStateException("A selected photo is too large to prepare.");
-                        JSONObject item = new JSONObject();
-                        item.put("name", photo.name.replaceAll("[^A-Za-z0-9._-]", "_") + ".jpg");
-                        item.put("type", "image/jpeg");
-                        item.put("data", Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP));
-                        array.put(item);
-                    }
-                    String payload = array.toString();
-                    runOnUiThread(() -> {
-                        dialog.dismiss();
-                        if (webView != null) webView.evaluateJavascript("window.onSquadChatNativePhotosSelected && window.onSquadChatNativePhotosSelected(" + JSONObject.quote(payload) + ")", null);
-                    });
-                } catch (Exception error) {
-                    runOnUiThread(() -> {
-                        send.setEnabled(true);
-                        send.setText("Try again");
-                        Toast.makeText(this, "Could not prepare selected photos: " + error.getMessage(), Toast.LENGTH_LONG).show();
-                    });
-                }
-            }).start();
+            Uri[] chosen = selected.toArray(new Uri[0]);
+            dialog.dismiss();
+            // Returning URIs through WebChromeClient's chooser callback lets the
+            // WebView read each image as a File. This avoids oversized Base64
+            // evaluateJavascript calls that fail for multi-photo batches.
+            completePhotoFileChooser(chosen);
         });
 
         dialog.setContentView(panel);
@@ -581,6 +539,12 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void completePhotoFileChooser(Uri[] selectedUris) {
+        ValueCallback<Uri[]> callback = filePathCallback;
+        filePathCallback = null;
+        if (callback != null) callback.onReceiveValue(selectedUris);
+    }
+
     private void deliverPhotoPermissionResult(int[] grantResults) {
         Runnable pending = pendingPhotoGallery;
         pendingPhotoGallery = null;
@@ -588,7 +552,10 @@ public class MainActivity extends Activity {
         boolean granted = false;
         for (int result : grantResults) if (result == PackageManager.PERMISSION_GRANTED) granted = true;
         if (granted) pending.run();
-        else Toast.makeText(this, "SquadChat needs photo access to show your gallery.", Toast.LENGTH_LONG).show();
+        else {
+            Toast.makeText(this, "SquadChat needs photo access to show your gallery.", Toast.LENGTH_LONG).show();
+            completePhotoFileChooser(null);
+        }
     }
 
     private class FcmBridge {
