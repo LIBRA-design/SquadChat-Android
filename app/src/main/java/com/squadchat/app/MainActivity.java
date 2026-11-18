@@ -476,7 +476,7 @@ public class MainActivity extends Activity {
                 int selectedIndex = new ArrayList<>(selected).indexOf(photo.uri);
                 number.setText(selectedIndex >= 0 ? String.valueOf(selectedIndex + 1) : "");
                 number.setBackground(selectedIndex >= 0 ? roundedBackground(Color.rgb(225, 91, 115), 20) : roundedBackground(0x66000000, 20));
-                cell.setForeground(roundedBackground(selectedIndex >= 0 ? 0x337FFFFFF : 0x00000000, 8));
+                cell.setForeground(roundedBackground(selectedIndex >= 0 ? 0x337FFFFF : 0x00000000, 8));
                 return cell;
             }
         };
