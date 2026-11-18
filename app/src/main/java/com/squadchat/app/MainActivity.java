@@ -260,14 +260,25 @@ public class MainActivity extends Activity {
                 MainActivity.this.filePathCallback = filePathCallback;
 
                 try {
-                    // ACTION_OPEN_DOCUMENT reliably supports multi-selection on Android's
-                    // system document picker and returns persistable content:// URIs to WebView.
-                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                    intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.setType("image/*");
-                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    Intent intent;
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        // Android Photo Picker: a native, privacy-preserving photo gallery
+                        // that appears as the system's bottom-sheet picker on supported devices.
+                        // It returns content URIs directly to WebView without broad media access.
+                        intent = new Intent(MediaStore.ACTION_PICK_IMAGES);
+                        intent.setType("image/*");
+                        if (Build.VERSION.SDK_INT >= 34) {
+                            intent.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, 10);
+                        }
+                    } else {
+                        // Android 12 and older use the system document picker with multi-select.
+                        intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                        intent.addCategory(Intent.CATEGORY_OPENABLE);
+                        intent.setType("image/*");
+                        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    }
                     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    startActivityForResult(Intent.createChooser(intent, "Select photos"), FILE_CHOOSER_REQUEST_CODE);
+                    startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
                     return true;
                 } catch (Exception e) {
                     MainActivity.this.filePathCallback = null;
