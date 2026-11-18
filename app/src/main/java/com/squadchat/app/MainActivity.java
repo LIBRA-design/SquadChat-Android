@@ -3,6 +3,7 @@ package com.squadchat.app;
 import android.app.Activity;
 import android.app.NotificationManager;
 import android.content.Context;
+import android.content.ClipData;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.app.AlertDialog;
@@ -259,8 +260,11 @@ public class MainActivity extends Activity {
                 MainActivity.this.filePathCallback = filePathCallback;
 
                 try {
-                    Intent intent = fileChooserParams.createIntent();
-                    startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
+                    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("image/*");
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    startActivityForResult(Intent.createChooser(intent, "Select photos"), FILE_CHOOSER_REQUEST_CODE);
                     return true;
                 } catch (Exception e) {
                     MainActivity.this.filePathCallback = null;
@@ -349,6 +353,21 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void openExternalUrl(String rawUrl) {
+            if (rawUrl == null) return;
+            try {
+                Uri uri = Uri.parse(rawUrl);
+                String scheme = uri.getScheme();
+                if (uri.getUserInfo() != null ||
+                    !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme)) ||
+                    isTrustedSquadChatUrl(rawUrl)) return;
+                startActivity(new Intent(Intent.ACTION_VIEW, uri));
+            } catch (Exception ignored) {
+                // Unsupported URLs are intentionally ignored.
+            }
+        }
+
+        @JavascriptInterface
         public void clearConversationNotifications(String conversationId) {
             if (conversationId == null || conversationId.trim().isEmpty()) return;
             NotificationManager manager =
@@ -422,9 +441,18 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
             if (filePathCallback != null) {
-                Uri[] results = WebChromeClient.FileChooserParams.parseResult(
-                    resultCode, data
-                );
+                Uri[] results = null;
+                if (resultCode == Activity.RESULT_OK && data != null) {
+                    ClipData clipData = data.getClipData();
+                    if (clipData != null && clipData.getItemCount() > 0) {
+                        results = new Uri[clipData.getItemCount()];
+                        for (int i = 0; i < clipData.getItemCount(); i++) {
+                            results[i] = clipData.getItemAt(i).getUri();
+                        }
+                    } else if (data.getData() != null) {
+                        results = new Uri[]{data.getData()};
+                    }
+                }
                 filePathCallback.onReceiveValue(results);
                 filePathCallback = null;
             }
