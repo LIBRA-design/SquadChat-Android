@@ -130,18 +130,35 @@ public class MainActivity extends Activity {
         }
 
         webView.setWebViewClient(new WebViewClient() {
+            private boolean openExternalHttpUrl(String url) {
+                if (url == null) return true;
+                try {
+                    Uri uri = Uri.parse(url);
+                    String scheme = uri.getScheme();
+                    if (uri.getUserInfo() != null ||
+                        !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))) {
+                        return true;
+                    }
+                    Intent external = new Intent(Intent.ACTION_VIEW, uri);
+                    startActivity(external);
+                } catch (Exception ignored) {
+                    // Do not allow unsupported or unsafe navigation into the WebView.
+                }
+                return true;
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                // Only the official HTTPS SquadChat origin may navigate inside this WebView.
-                if (request == null || !isTrustedSquadChatUrl(request.getUrl().toString())) {
-                    return true;
-                }
-                return false;
+                if (request == null || request.getUrl() == null) return true;
+                String url = request.getUrl().toString();
+                if (isTrustedSquadChatUrl(url)) return false;
+                return openExternalHttpUrl(url);
             }
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return !isTrustedSquadChatUrl(url);
+                if (isTrustedSquadChatUrl(url)) return false;
+                return openExternalHttpUrl(url);
             }
 
             @Override
