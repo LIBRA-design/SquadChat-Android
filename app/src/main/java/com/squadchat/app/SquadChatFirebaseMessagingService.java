@@ -55,10 +55,29 @@ public class SquadChatFirebaseMessagingService extends FirebaseMessagingService 
             }
         }
 
+        body = cleanNotificationBody(body);
+
         String conversationId = remoteMessage.getData() == null
             ? ""
             : remoteMessage.getData().getOrDefault("conversation_id", "");
         showNotification(title, body, conversationId);
+    }
+
+    // Swipe-to-reply messages store reply metadata before the actual message text.
+    // That metadata is for the in-app chat UI and must never appear in Android alerts.
+    private String cleanNotificationBody(String rawBody) {
+        if (rawBody == null || rawBody.isEmpty()) return "You have a new message";
+
+        final String marker = "[[SQUADCHAT_REPLY_V1]]";
+        if (!rawBody.startsWith(marker)) return rawBody;
+
+        int separator = rawBody.indexOf('\n', marker.length());
+        if (separator < 0 || separator + 1 >= rawBody.length()) {
+            return "You have a new message";
+        }
+
+        String messageText = rawBody.substring(separator + 1).trim();
+        return messageText.isEmpty() ? "You have a new message" : messageText;
     }
 
     private void showNotification(String title, String body, String conversationId) {
