@@ -260,10 +260,13 @@ public class MainActivity extends Activity {
                 MainActivity.this.filePathCallback = filePathCallback;
 
                 try {
-                    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    // ACTION_OPEN_DOCUMENT reliably supports multi-selection on Android's
+                    // system document picker and returns persistable content:// URIs to WebView.
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
                     intent.setType("image/*");
                     intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     startActivityForResult(Intent.createChooser(intent, "Select photos"), FILE_CHOOSER_REQUEST_CODE);
                     return true;
                 } catch (Exception e) {
@@ -361,7 +364,15 @@ public class MainActivity extends Activity {
                 if (uri.getUserInfo() != null ||
                     !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme)) ||
                     isTrustedSquadChatUrl(rawUrl)) return;
-                startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                // JavascriptInterface methods run on a WebView background thread.
+                // Android UI intents must be launched on the Activity's UI thread.
+                runOnUiThread(() -> {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                    } catch (Exception ignored) {
+                        // No compatible browser/app is installed for this URL.
+                    }
+                });
             } catch (Exception ignored) {
                 // Unsupported URLs are intentionally ignored.
             }
@@ -443,18 +454,25 @@ public class MainActivity extends Activity {
             if (filePathCallback != null) {
                 Uri[] results = null;
                 if (resultCode == Activity.RESULT_OK && data != null) {
+                    java.util.LinkedHashSet<Uri> selectedUris = new java.util.LinkedHashSet<>();
                     ClipData clipData = data.getClipData();
-                    if (clipData != null && clipData.getItemCount() > 0) {
-                        results = new Uri[clipData.getItemCount()];
+                    if (clipData != null) {
                         for (int i = 0; i < clipData.getItemCount(); i++) {
-                            results[i] = clipData.getItemAt(i).getUri();
+                            Uri selected = clipData.getItemAt(i).getUri();
+                            if (selected != null) selectedUris.add(selected);
                         }
-                    } else if (data.getData() != null) {
-                        results = new Uri[]{data.getData()};
+                    }
+                    // Some Android pickers return the first item in data.getData()
+                    // and the remaining items in ClipData; merge both without duplicates.
+                    Uri singleUri = data.getData();
+                    if (singleUri != null) selectedUris.add(singleUri);
+                    if (!selectedUris.isEmpty()) {
+                        results = selectedUris.toArray(new Uri[0]);
                     }
                 }
-                filePathCallback.onReceiveValue(results);
+                ValueCallback<Uri[]> callback = filePathCallback;
                 filePathCallback = null;
+                callback.onReceiveValue(results);
             }
             return;
         }
