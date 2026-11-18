@@ -33,7 +33,7 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build debug APK
-        run: gradle --no-daemon -PversionCode=${{ github.run_number }} assembleDebug
+        run: gradle --no-daemon -PsquadChatVersionCode=${{ github.run_number }} assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
