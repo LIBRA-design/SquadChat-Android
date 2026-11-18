@@ -3,6 +3,9 @@ plugins {
     id 'com.google.gms.google-services'
 }
 
+def squadChatBuildVersion = providers.gradleProperty('squadChatVersionCode').getOrElse('1')
+def squadChatBuildVersionCode = squadChatBuildVersion.toInteger()
+
 android {
     namespace 'com.squadchat.app'
     compileSdk 35
@@ -11,8 +14,8 @@ android {
         applicationId 'com.squadchat.app'
         minSdk 24
         targetSdk 35
-        versionCode (project.findProperty('versionCode') ?: '1').toInteger()
-        versionName "1.0.${project.findProperty('versionCode') ?: '1'}"
+        versionCode squadChatBuildVersionCode
+        versionName "1.0.${squadChatBuildVersion}"
     }
 }
 
