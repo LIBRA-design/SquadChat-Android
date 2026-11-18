@@ -17,6 +17,8 @@ import android.view.View;
 import android.webkit.WebView;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebViewClient;
+import android.webkit.SslErrorHandler;
+import android.net.http.SslError;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebResourceRequest;
@@ -37,6 +39,22 @@ import org.json.JSONObject;
 import com.google.firebase.messaging.FirebaseMessaging;
 
 public class MainActivity extends Activity {
+
+    private static final String TRUSTED_HOST = "squadchat-ew2b04.v2.appdeploy.ai";
+    private static final String TRUSTED_URL = "https://" + TRUSTED_HOST + "/";
+
+    private boolean isTrustedSquadChatUrl(String url) {
+        if (url == null) return false;
+        try {
+            Uri uri = Uri.parse(url);
+            return "https".equalsIgnoreCase(uri.getScheme())
+                && TRUSTED_HOST.equalsIgnoreCase(uri.getHost())
+                && (uri.getPort() == -1 || uri.getPort() == 443)
+                && uri.getUserInfo() == null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
     private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 2002;
@@ -101,10 +119,53 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setLoadsImagesAutomatically(true);
         settings.setSupportZoom(false);
+        // SquadChat is HTTPS-only; do not allow local files or mixed HTTP content.
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
+        settings.setAllowFileAccessFromFileURLs(false);
+        settings.setAllowUniversalAccessFromFileURLs(false);
+        settings.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            settings.setSafeBrowsingEnabled(true);
+        }
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                // Only the official HTTPS SquadChat origin may navigate inside this WebView.
+                if (request == null || !isTrustedSquadChatUrl(request.getUrl().toString())) {
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return !isTrustedSquadChatUrl(url);
+            }
+
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                // Never bypass certificate errors, even if the user is offline.
+                handler.cancel();
+                if (view == webView) {
+                    pageLoadFailed = true;
+                    errorText.setText("Secure connection failed\\n\\nPlease check your connection and try again.");
+                    errorText.setVisibility(View.VISIBLE);
+                    webView.setVisibility(View.GONE);
+                }
+            }
+
+            @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                if (!isTrustedSquadChatUrl(url)) {
+                    view.stopLoading();
+                    pageLoadFailed = true;
+                    errorText.setText("Blocked an untrusted page. SquadChat can only open its official website.");
+                    errorText.setVisibility(View.VISIBLE);
+                    view.setVisibility(View.GONE);
+                    return;
+                }
                 pageLoadFailed = false;
                 progressBar.setVisibility(View.VISIBLE);
             }
@@ -200,7 +261,7 @@ public class MainActivity extends Activity {
 
         try {
             webView.loadUrl(
-                "https://squadchat-ew2b04.v2.appdeploy.ai/"
+                TRUSTED_URL
             );
         } catch (Exception e) {
             errorText.setText("Unable to start SquadChat: " + e.getMessage());
