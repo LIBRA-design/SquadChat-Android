@@ -1,5 +1,13 @@
 package com.squadchat.nativeapp
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import io.github.jan.supabase.storage.storage
+import kotlinx.serialization.json.JsonPrimitive
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -65,16 +73,19 @@ private data class ChatReadRow(
 @Composable
 fun ChatScreen(userId: String, conversationId: String, conversationTitle: String, isGroup: Boolean, onBack: () -> Unit) {
     val supabase = SupabaseClientProvider.client
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var messages by remember { mutableStateOf<List<ChatMessageRow>>(emptyList()) }
     var reactions by remember { mutableStateOf<List<ChatReactionRow>>(emptyList()) }
     var readRows by remember { mutableStateOf<List<ChatReadRow>>(emptyList()) }
     var draft by remember { mutableStateOf("") }
+    var selectedPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var sending by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<ChatMessageRow?>(null) }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { selectedPhotos = it.take(10) }
 
     suspend fun loadMessages() {
         try {
@@ -152,6 +163,31 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
             } finally {
                 sending = false
             }
+        }
+    }
+
+    fun sendPhotos() {
+        if (selectedPhotos.isEmpty() || sending) return
+        val chosen = selectedPhotos
+        scope.launch {
+            sending = true
+            errorMessage = ""
+            try {
+                val urls = mutableListOf<String>()
+                chosen.forEach { uri ->
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Could not read a selected photo.")
+                    require(bytes.size <= 5 * 1024 * 1024) { "Each photo must be 5 MB or smaller." }
+                    val ext = context.contentResolver.getType(uri)?.substringAfter("/")?.lowercase()?.takeIf { it in listOf("jpeg", "jpg", "png", "webp", "gif") } ?: "jpg"
+                    val path = "$conversationId/$userId/${java.util.UUID.randomUUID()}.$ext"
+                    supabase.storage.from("squadchat-images").upload(path, bytes)
+                    urls.add(supabase.storage.from("squadchat-images").publicUrl(path))
+                }
+                val content = if (urls.size == 1) "IMG:" + urls.first() else "IMGSET:" + kotlinx.serialization.json.buildJsonArray { urls.forEach { add(JsonPrimitive(it)) } }.toString()
+                supabase.postgrest["messages"].insert(buildJsonObject { put("conversation_id", conversationId); put("sender_id", userId); put("content", content) })
+                selectedPhotos = emptyList()
+                loadMessages()
+            } catch (e: Exception) { errorMessage = e.message?.take(180) ?: "Photo upload failed." }
+            finally { sending = false }
         }
     }
 
@@ -266,7 +302,7 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                                     .background(if (mine) ChatHeader else ChatIncoming, RoundedCornerShape(17.dp))
                                     .padding(horizontal = 13.dp, vertical = 9.dp)
                             ) {
-                                Text(message.content, color = ChatText, fontSize = 14.sp, lineHeight = 20.sp)
+                                MessageContent(message.content)
                                 Spacer(Modifier.height(4.dp))
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                                     Text(formatChatTime(message.createdAt), color = ChatMuted, fontSize = 9.sp)
@@ -311,6 +347,7 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                 Modifier.fillMaxWidth().background(ChatHeader).padding(horizontal = 10.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                TextButton(onClick = { photoPicker.launch("image/*") }, enabled = !sending) { Text("＋", color = ChatGold, fontSize = 21.sp) }
                 Box(Modifier.weight(1f).background(ChatBg, RoundedCornerShape(22.dp)).padding(horizontal = 15.dp, vertical = 12.dp)) {
                     if (draft.isBlank()) Text("Message…", color = ChatMuted, fontSize = 14.sp)
                     BasicTextField(
@@ -325,11 +362,11 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                 }
                 Spacer(Modifier.width(8.dp))
                 Button(
-                    onClick = { sendMessage() },
-                    enabled = draft.isNotBlank() && !sending,
+                    onClick = { if (selectedPhotos.isNotEmpty()) sendPhotos() else sendMessage() },
+                    enabled = (draft.isNotBlank() || selectedPhotos.isNotEmpty()) && !sending,
                     colors = ButtonDefaults.buttonColors(containerColor = ChatGold, contentColor = ChatBg),
                     shape = RoundedCornerShape(20.dp)
-                ) { Text(if (sending) "…" else "Send", fontWeight = FontWeight.Bold) }
+                ) { Text(if (sending) "…" else if (selectedPhotos.isNotEmpty()) "Send ${selectedPhotos.size}" else "Send", fontWeight = FontWeight.Bold) }
             }
         }
     }
@@ -338,3 +375,22 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
 private fun formatChatTime(value: String): String = try {
     Instant.parse(value).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("h:mm a"))
 } catch (_: Exception) { "" }
+
+@Composable
+private fun MessageContent(content: String) {
+    val urls = try {
+        when {
+            content.startsWith("IMGSET:") -> (kotlinx.serialization.json.Json.parseToJsonElement(content.removePrefix("IMGSET:")) as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
+            content.startsWith("IMG:") -> listOf(content.removePrefix("IMG:"))
+            else -> emptyList()
+        }
+    } catch (_: Exception) { emptyList() }
+    if (urls.isEmpty()) Text(content, color = ChatText, fontSize = 14.sp, lineHeight = 20.sp)
+    else if (urls.size == 1) AsyncImage(model = urls.first(), contentDescription = "Photo message", modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp).clip(RoundedCornerShape(12.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+    else Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        urls.chunked(2).forEach { group -> Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            group.forEach { url -> AsyncImage(model = url, contentDescription = "Album photo", modifier = Modifier.weight(1f).height(125.dp).clip(RoundedCornerShape(8.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+            if (group.size == 1) Spacer(Modifier.weight(1f))
+        } }
+    }
+}
