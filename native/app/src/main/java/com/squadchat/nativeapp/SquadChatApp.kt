@@ -66,6 +66,7 @@ fun SquadChatApp() {
     var activeConversationId by remember { mutableStateOf<String?>(null) }
     var activeConversationTitle by remember { mutableStateOf("") }
     var activeConversationIsGroup by remember { mutableStateOf(false) }
+    var selectedMainTab by remember { mutableStateOf("chats") }
     var logoutMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(supabase) {
@@ -116,21 +117,41 @@ fun SquadChatApp() {
                     isGroup = activeConversationIsGroup,
                     onBack = { activeConversationId = null }
                 )
-                signedIn -> ConversationListScreen(
-                    userId = signedInUserId,
-                    email = signedInEmail,
-                    onSignOut = {
-                        scope.launch {
-                            runCatching { supabase.auth.signOut() }
-                                .onFailure { logoutMessage = "Could not log out. Check your connection and try again." }
+                signedIn -> Column(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        if (selectedMainTab == "profile") {
+                            ProfileScreen(userId = signedInUserId, email = signedInEmail)
+                        } else {
+                            ConversationListScreen(
+                                userId = signedInUserId,
+                                email = signedInEmail,
+                                onSignOut = {
+                                    scope.launch {
+                                        runCatching { supabase.auth.signOut() }
+                                            .onFailure { logoutMessage = "Could not log out. Check your connection and try again." }
+                                    }
+                                },
+                                onOpenChat = { id, title, isGroup ->
+                                    activeConversationId = id
+                                    activeConversationTitle = title
+                                    activeConversationIsGroup = isGroup
+                                }
+                            )
                         }
-                    },
-                    onOpenChat = { id, title, isGroup ->
-                        activeConversationId = id
-                        activeConversationTitle = title
-                        activeConversationIsGroup = isGroup
                     }
-                )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().background(DeepMaroon).padding(horizontal = 20.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = { selectedMainTab = "chats" }) {
+                            Text("Chats", color = if (selectedMainTab == "chats") Gold else Muted, fontWeight = FontWeight.SemiBold)
+                        }
+                        TextButton(onClick = { selectedMainTab = "profile" }) {
+                            Text("Profile", color = if (selectedMainTab == "profile") Gold else Muted, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
                 else -> AuthenticationScreen()
             }
         }
