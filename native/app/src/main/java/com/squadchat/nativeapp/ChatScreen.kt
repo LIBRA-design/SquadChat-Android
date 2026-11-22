@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -268,6 +269,79 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                 errorMessage = "Could not delete this message. " + (e.message?.take(140) ?: "")
             }
         }
+    }
+
+
+    if (showBackgroundPicker) {
+        AlertDialog(
+            onDismissRequest = { showBackgroundPicker = false },
+            title = { Text("Chat background", color = ChatGold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("This background is shared with everyone in this conversation.", color = ChatMuted, fontSize = 12.sp)
+                    backgroundChoices.chunked(2).forEach { pair ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            pair.forEach { (name, color) ->
+                                TextButton(
+                                    modifier = Modifier.weight(1f).background(color, RoundedCornerShape(9.dp)),
+                                    onClick = {
+                                        scope.launch {
+                                            try {
+                                                val hex = "#%06X".format(0xFFFFFF and color.toArgb())
+                                                supabase.postgrest["conversation_appearance"].upsert(buildJsonObject {
+                                                    put("conversation_id", conversationId)
+                                                    put("background_kind", "solid")
+                                                    put("background_value", hex)
+                                                    put("updated_by", userId)
+                                                    put("updated_at", Instant.now().toString())
+                                                }) { onConflict = "conversation_id" }
+                                                chatBackground = color
+                                                showBackgroundPicker = false
+                                            } catch (e: Exception) {
+                                                errorMessage = "Could not save background: " + (e.message?.take(120) ?: "")
+                                            }
+                                        }
+                                    }
+                                ) { Text(name, color = Color.White, fontSize = 10.sp) }
+                            }
+                        }
+                    }
+                    TextButton(onClick = {
+                        scope.launch {
+                            try {
+                                supabase.postgrest["conversation_appearance"].upsert(buildJsonObject {
+                                    put("conversation_id", conversationId)
+                                    put("background_kind", "default")
+                                    put("background_value", kotlinx.serialization.json.JsonNull)
+                                    put("updated_by", userId)
+                                    put("updated_at", Instant.now().toString())
+                                }) { onConflict = "conversation_id" }
+                                chatBackground = Color(0xFF170B0D)
+                                showBackgroundPicker = false
+                            } catch (e: Exception) {
+                                errorMessage = "Could not reset background: " + (e.message?.take(120) ?: "")
+                            }
+                        }
+                    }) { Text("Reset to default", color = ChatGold) }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showBackgroundPicker = false }) { Text("Close", color = ChatGold) } }
+        )
+    }
+
+    if (showSharedPhotos) {
+        val photoMessages = messages.filter { it.content.startsWith("IMG:") || it.content.startsWith("IMGSET:") }
+        AlertDialog(
+            onDismissRequest = { showSharedPhotos = false },
+            title = { Text("Shared photos", color = ChatGold) },
+            text = {
+                if (photoMessages.isEmpty()) Text("No shared photos in this conversation yet.", color = ChatMuted)
+                else Column(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    photoMessages.forEach { photo -> MessageContent(photo.content) }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showSharedPhotos = false }) { Text("Close", color = ChatGold) } }
+        )
     }
 
     if (deleteTarget != null) {
