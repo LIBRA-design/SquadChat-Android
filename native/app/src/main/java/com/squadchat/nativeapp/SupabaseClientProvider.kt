@@ -3,6 +3,7 @@ package com.squadchat.nativeapp
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.FlowType
+import io.github.jan.supabase.postgrest.Postgrest
 
 /**
  * Public client configuration only.
@@ -22,5 +23,6 @@ object SupabaseClientProvider {
             alwaysAutoRefresh = true
             autoLoadFromStorage = true
         }
+        install(Postgrest)
     }
 }
