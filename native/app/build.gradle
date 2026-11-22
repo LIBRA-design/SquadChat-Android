@@ -17,10 +17,10 @@ android {
         versionCode 2
         versionName "0.2.0"
 
-        // Publishable keys are designed for public clients and are protected by RLS.
+        // The legacy anon key is a public client key; database access remains protected by RLS.
         // Never put a Supabase secret/service-role key in this file.
         buildConfigField "String", "SUPABASE_URL", "\"https://xochwkeytdumpvvjzpdv.supabase.co\""
-        buildConfigField "String", "SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable_qD2XJDu4UJcvV3GZf8rrgg_t3TJ0NE9\""
+        buildConfigField "String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvY2h3a2V5dGR1bXB2dmp6cGR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3NDIxNzcsImV4cCI6MjEwODMxODE3N30.rIRdiphkPIDsFQy16edKPZPkJpQKIWQT1SbUNy8NqNY\""
     }
 
     buildFeatures {
