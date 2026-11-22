@@ -124,7 +124,8 @@ private data class ConversationPreview(
 fun ConversationListScreen(
     userId: String,
     email: String,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    onOpenChat: (String, String, Boolean) -> Unit
 ) {
     val supabase = SupabaseClientProvider.client
     val scope = rememberCoroutineScope()
@@ -133,7 +134,6 @@ fun ConversationListScreen(
     var refreshing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var search by remember { mutableStateOf("") }
-    var selected by remember { mutableStateOf<ConversationPreview?>(null) }
 
     suspend fun refreshList() {
         if (userId.isBlank()) {
@@ -329,30 +329,14 @@ fun ConversationListScreen(
                     verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
                     items(filtered, key = { it.id }) { item ->
-                        ConversationRowView(item = item, onClick = { selected = item })
+                        ConversationRowView(item = item, onClick = { onOpenChat(item.id, item.title, item.isGroup) })
                     }
                 }
             }
         }
     }
 
-    selected?.let { item ->
-        AlertDialog(
-            onDismissRequest = { selected = null },
-            containerColor = ListMaroon,
-            title = { Text(item.title, color = ListGold) },
-            text = {
-                Column {
-                    Text(item.subtitle, color = ListText)
-                    Spacer(Modifier.height(8.dp))
-                    Text("This conversation is connected. The native chat screen is the next implementation stage.", color = ListMuted, fontSize = 13.sp)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { selected = null }) { Text("Close", color = ListGold) }
-            }
-        )
-    }
+
 }
 
 @Composable
