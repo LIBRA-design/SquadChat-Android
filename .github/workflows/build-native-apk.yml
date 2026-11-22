@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - native-android
+      - native-ui-rebuild-review
     paths:
       - "native/**"
       - ".github/workflows/build-native-apk.yml"
