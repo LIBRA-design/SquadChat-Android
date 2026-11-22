@@ -1,0 +1,839 @@
+[
+  {
+    "name": "Open setup and inspect the database SQL",
+    "sanity": true,
+    "viewport": "desktop",
+    "covers": [
+      "Supabase setup workflow",
+      "database schema instructions",
+      "SQL copy instructions"
+    ],
+    "description": "Verifies a first-time user can open setup and view the database SQL without entering credentials.",
+    "steps": [
+      "Open SquadChat",
+      "Select Setup",
+      "Select View database SQL"
+    ],
+    "expected": "The setup dialog displays the SQL schema and a copy SQL action, and no credentials are required just to inspect it."
+  },
+  {
+    "name": "Validate account registration inputs",
+    "viewport": "mobile",
+    "covers": [
+      "registration username validation",
+      "password length validation",
+      "mobile responsive layout"
+    ],
+    "description": "Verifies the registration form requires a valid username and a password of at least eight characters.",
+    "steps": [
+      "Open SquadChat",
+      "Choose Create account",
+      "Enter an invalid username or a password shorter than eight characters",
+      "Submit the form"
+    ],
+    "expected": "The browser blocks invalid required fields or the app shows a validation message, and no account is created."
+  },
+  {
+    "name": "Show recent activity in conversation list",
+    "viewport": "mobile",
+    "covers": [
+      "conversation list latest-message preview",
+      "conversation list activity timestamp",
+      "unread message count badges",
+      "read receipts on sent messages",
+      "online presence and last seen status",
+      "green online indicator in direct conversation list rows",
+      "mobile chat-list styling",
+      "messages remain stored",
+      "cross-device message updates without browser refresh"
+    ],
+    "description": "Verifies conversations display recent activity and new messages from another device appear automatically without refreshing the browser.",
+    "steps": [
+      "Sign in with a test account that has an existing conversation",
+      "Open the conversation list",
+      "Actor A sends a message from Device A while Actor B is viewing the conversation list on Device B",
+      "Wait for the latest-message preview and unread badge to update on Device B without refreshing",
+      "Actor B opens the conversation and verifies the newest message is visible immediately at the bottom of the message list, even when older unread messages exist"
+    ],
+    "expected": "While Actor B is viewing the conversation list, Actor A's new message updates the conversation preview and unread badge without refreshing. When Actor B opens that conversation, the newest message is visible at the bottom without first positioning the viewport on an older unread message. The unread divider remains available in the message history, and the unread count clears. Messages show Sent or Read when a participant has read them, and the conversation row shows recent activity and the online indicator when applicable."
+  },
+  {
+    "name": "Require configuration before real messaging",
+    "viewport": "desktop",
+    "covers": [
+      "configuration required state",
+      "honest backend readiness messaging",
+      "no simulated messages"
+    ],
+    "description": "Verifies the app shows that Supabase setup is required when no project credentials have been configured.",
+    "steps": [
+      "Open SquadChat in a fresh browser context without saved configuration",
+      "Observe the connection status",
+      "Open the setup dialog and cancel it"
+    ],
+    "expected": "The app shows Setup required and never displays fake conversations or claims that real messaging is connected."
+  },
+  {
+    "name": "Edit and save profile details including a device photo",
+    "viewport": "mobile",
+    "covers": [
+      "clean profile editor",
+      "display name and bio validation",
+      "profile changes saved to Supabase",
+      "select anime avatar",
+      "upload profile photo from device",
+      "profile photo persists and appears in chat list"
+    ],
+    "description": "Verifies a signed-in user can edit their display name and bio while username and email remain read-only.",
+    "steps": [
+      "Sign in with a configured test account",
+      "Open Profile",
+      "Enter a display name and short bio",
+      "Select Save profile",
+      "Open the profile editor again"
+    ],
+    "expected": "The updated display name, bio, and selected anime avatar remain visible after reopening the editor, while username and email remain unchanged."
+  },
+  {
+    "name": "Render image attachments and keep chat within mobile viewport",
+    "viewport": "mobile",
+    "covers": [
+      "open image attachments in an in-app viewer and close with back navigation",
+      "long image URLs do not overflow mobile viewport",
+      "photo message preview shows sender-aware friendly text",
+      "mobile chat responsive layout"
+    ],
+    "description": "Verifies image attachment messages are rendered as inline images when loaded from stored messages and long URLs cannot expand the phone layout horizontally.",
+    "steps": [
+      "Sign in with a test account that has a conversation containing an image attachment",
+      "Open the conversation and inspect the latest image message",
+      "Return to the conversation list and reopen the same conversation",
+      "Check that the image remains an image and the page fits the phone width"
+    ],
+    "expected": "The stored image message is rendered inline rather than as a raw storage URL; the conversation list shows Photo sent for the current user's image and Sent a photo for another participant's image, without horizontal page overflow."
+  },
+  {
+    "name": "Delete own message with confirmation",
+    "viewport": "mobile",
+    "covers": [
+      "long-press message action menu with emoji reactions",
+      "delete own message appears first in the vertical action menu",
+      "vertical Delete, Reply, Pin action order with borderless buttons",
+      "action menu closes when tapping outside",
+      "destructive-action confirmation",
+      "database delete policy",
+      "realtime message removal",
+      "message history updates after deletion"
+    ],
+    "description": "Verifies a signed-in user can delete their own message after confirmation and the message disappears from the conversation.",
+    "steps": [
+      "Sign in with a configured test account and open an existing conversation",
+      "Send a new text message named Delete Me",
+      "Press and hold the sent message to open the compact vertical Delete, Reply, Pin action menu",
+      "Select Delete from the menu",
+      "Confirm the deletion",
+      "Check that the message is no longer visible and remains absent after reopening the conversation"
+    ],
+    "expected": "The app asks for confirmation, deletes only the signed-in user's message, and the removed message does not return after reopening the conversation. Other participants' messages remain visible."
+  },
+  {
+    "name": "Reply to incoming and outgoing messages with a right swipe",
+    "viewport": "mobile",
+    "covers": [
+      "swipe right on an incoming message to quote-reply",
+      "swipe right on own outgoing message to quote-reply",
+      "touch swipe gesture works in Android WebView",
+      "reply preview identifies the selected message"
+    ],
+    "description": "Verifies a user can swipe right on either participant's message and the composer targets the exact selected message.",
+    "steps": [
+      "Sign in on a mobile device and open a conversation with both incoming and outgoing messages",
+      "Swipe right on an incoming message and verify the reply composer identifies that message",
+      "Cancel the reply, then swipe right on one of the user's own outgoing messages",
+      "Verify the reply composer identifies the outgoing message and send a reply",
+      "Verify the sent message displays a quote preview for the selected outgoing message"
+    ],
+    "expected": "A rightward swipe on either an incoming or outgoing message opens the reply composer for that exact message; sending the reply shows the correct quoted message and sender."
+  },
+  {
+    "name": "React to a message and remove own reaction",
+    "viewport": "mobile",
+    "covers": [
+      "add emoji reaction",
+      "reaction count updates",
+      "remove own reaction",
+      "reaction sync across participants",
+      "reaction persistence after reopening conversation"
+    ],
+    "description": "Verifies conversation members can react to a message, see reaction counts, remove their own reaction, and retain reactions after reopening the conversation.",
+    "steps": [
+      "Sign in with Actor A and open an existing conversation",
+      "Press and hold a message to open its emoji reaction menu",
+      "Verify the thumbs-up count appears",
+      "Sign in as Actor B on another device and verify the reaction appears",
+      "Actor A selects the same reaction again to remove it",
+      "Reopen the conversation and verify the reaction remains removed"
+    ],
+    "expected": "The reaction count is visible to both actors in real time, and Actor A can toggle their own reaction off without affecting other reactions or messages."
+  },
+  {
+    "name": "Show a clear error for an unavailable Supabase project",
+    "viewport": "mobile",
+    "covers": [
+      "Supabase connection error handling",
+      "user-visible error state",
+      "mobile setup"
+    ],
+    "description": "Verifies a malformed or unreachable Supabase configuration results in a visible setup or connection error rather than a false success.",
+    "steps": [
+      "Open Setup",
+      "Enter a syntactically valid project URL and an invalid publishable key",
+      "Save and connect"
+    ],
+    "expected": "The app displays a connection or authentication error and does not claim that messages are being delivered."
+  },
+  {
+    "name": "Prevent duplicate direct chats on rapid taps",
+    "viewport": "mobile",
+    "covers": [
+      "direct-message request lock",
+      "disabled Message button while opening",
+      "loading spinner and opening feedback",
+      "reuse existing direct conversation",
+      "prevent duplicate conversations on double-click"
+    ],
+    "description": "Verifies rapid taps on Message are ignored while a direct conversation is being opened or created.",
+    "steps": [
+      "Sign in with a configured test account and search for a registered friend without an existing direct chat",
+      "Tap Message twice quickly",
+      "Observe the Message button while the request is pending",
+      "Wait for the conversation to open",
+      "Return to the conversation list and search for the same friend again",
+      "Tap Message again"
+    ],
+    "expected": "The first tap immediately changes the button to a disabled Opening chat state with a spinner; the second tap does not create another request. Exactly one direct conversation exists, and tapping Message later reopens that same conversation.",
+    "sanity": true
+  },
+  {
+    "name": "Keep conversation avatars stable during list refreshes",
+    "viewport": "mobile",
+    "covers": [
+      "conversation avatar image node reuse",
+      "no profile picture flicker during conversation list rerenders",
+      "avatar updates when profile photo URL changes"
+    ],
+    "description": "Verifies conversation list refreshes preserve existing avatar image elements and only replace them when the underlying photo URL changes.",
+    "steps": [
+      "Sign in with an account that has a conversation with a friend who has a profile photo",
+      "Trigger a conversation list refresh by opening and closing a conversation or receiving a new message",
+      "Observe the friend's avatar while the list updates",
+      "Change the friend's profile photo and refresh the conversation list"
+    ],
+    "expected": "The existing profile photo stays visible without repeatedly flashing or reloading during list updates; a genuinely changed photo URL replaces the old image.",
+    "sanity": false
+  },
+  {
+    "name": "Reset password link opens password form",
+    "viewport": "mobile",
+    "covers": [
+      "Supabase password recovery callback",
+      "new password and confirmation validation",
+      "recovery session does not auto-open chat",
+      "successful password update and return to login"
+    ],
+    "description": "Verifies an email recovery link routes to a new-password form instead of automatically entering the chat app.",
+    "steps": [
+      "Request a password reset for a test account",
+      "Open the reset email link in the same browser",
+      "Enter a new password and matching confirmation",
+      "Save the new password"
+    ],
+    "expected": "The app shows the Choose a new password form, rejects mismatched passwords, updates the password, signs out of the recovery session, and returns to login with a success message.",
+    "sanity": false
+  },
+  {
+    "name": "Prevent duplicate group chats",
+    "viewport": "mobile",
+    "covers": [
+      "group creation double-submit protection",
+      "reuse existing group with same name and members",
+      "group creation success and error feedback"
+    ],
+    "description": "Verifies repeated group creation attempts do not create a second conversation when the same group name and member set already exist.",
+    "steps": [
+      "Sign in with a configured test account and at least two registered friends",
+      "Create a group with a name and those two friends",
+      "Submit the same group name and member list again",
+      "Check the conversation list and opened conversation"
+    ],
+    "expected": "The create button is disabled while the request is processing; a repeated matching request opens the existing group instead of creating a second conversation, and visible feedback explains the result."
+  },
+  {
+    "name": "Reset password with the emailed one-time code",
+    "viewport": "mobile",
+    "covers": [
+      "email OTP recovery verification",
+      "single active password reset form",
+      "password update after OTP verification",
+      "return to login after successful reset",
+      "password recovery does not initialize chat or query conversation membership"
+    ],
+    "description": "Verifies the email-code reset flow keeps one form active while Supabase emits its recovery event and saves the new password.",
+    "steps": [
+      "Request a password reset for a test account",
+      "Enter the newest emailed recovery code and a matching new password",
+      "Submit the reset form",
+      "Observe the result and return to login"
+    ],
+    "expected": "The OTP form remains in control during verification, no second recovery form replaces it, the password update completes, no conversation list or membership query is triggered by the USER_UPDATED event, and the user returns to login with a success notice."
+  },
+  {
+    "name": "Receive and clear in-app message notifications",
+    "viewport": "mobile",
+    "covers": [
+      "message-triggered notification creation",
+      "recipient-only notification visibility",
+      "unread notification badge",
+      "mark notification read",
+      "open the related conversation from a notification",
+      "realtime notification delivery between accounts"
+    ],
+    "description": "Verifies a message sent by one member creates a private in-app notification for the other member and that the recipient can clear and open it.",
+    "steps": [
+      "Sign in as Actor B on Device B and leave SquadChat on the conversation list",
+      "Sign in as Actor A on Device A and send a message in their shared conversation",
+      "Wait for Actor B to receive the new notification without refreshing",
+      "Open the notification bell and select the new-message notification",
+      "Return to the notification list and mark any remaining notifications as read"
+    ],
+    "expected": "Actor B sees an unread badge and a notification naming Actor A; selecting it opens the correct conversation and marks it read. Actor A does not receive a notification for their own message."
+  },
+  {
+    "name": "Reconnect live chat after returning from background",
+    "viewport": "mobile",
+    "covers": [
+      "reconnect active conversation realtime channel on app resume",
+      "suppress background-only realtime interruption notice",
+      "new messages sync after app resume"
+    ],
+    "description": "Verifies the active conversation restores live updates after the mobile app is backgrounded and reopened.",
+    "steps": [
+      "Sign in on a mobile device and open an existing conversation",
+      "Send the app to the background without closing it",
+      "Send a new message from Actor B on another device",
+      "Return to SquadChat on the first device",
+      "Wait for the conversation to reconnect"
+    ],
+    "expected": "SquadChat refreshes the active conversation and restores its live subscription; the new message appears without a manual app restart, and a background-only connection interruption does not produce a misleading error notice."
+  },
+  {
+    "name": "Open the Basic Admin dashboard and manage account status",
+    "viewport": "mobile",
+    "covers": [
+      "admin-only dashboard access",
+      "dashboard account and conversation statistics",
+      "user search by username or display name",
+      "suspend and reactivate accounts",
+      "admin account cannot suspend itself",
+      "ordinary users cannot access admin controls"
+    ],
+    "description": "Verifies the configured admin can view dashboard statistics and user controls while regular users do not see admin entry points.",
+    "steps": [
+      "Sign in as the configured admin account",
+      "Open the Admin dashboard from the profile panel",
+      "Verify the statistics and user list appear",
+      "Search for a test account by username",
+      "Suspend the test account and verify its status changes",
+      "Reactivate the same test account and verify its status returns to Active",
+      "Sign in as an ordinary account and inspect the profile panel"
+    ],
+    "expected": "The admin sees the dashboard and can suspend/reactivate a test account. The admin cannot suspend their own account. An ordinary user has no Admin dashboard button and cannot call admin actions."
+  },
+  {
+    "name": "Show ADMIN badges and confirm permanent deletion with Cancel or Delete",
+    "viewport": "mobile",
+    "covers": [
+      "ADMIN badge in own profile",
+      "ADMIN badge in friend profile",
+      "ADMIN badge in direct conversation list",
+      "ADMIN badge in group member list",
+      "account deletion removes related messages and files",
+      "permanent account deletion confirmation with Cancel and Delete buttons",
+      "account deletion removes related messages and files",
+      "creator-owned conversations are reassigned or removed before account deletion",
+      "deleted-account direct conversations remain visible as unavailable",
+      "deleted-account direct conversations block opening messaging, replies, reactions, and attachments"
+    ],
+    "description": "Verifies the admin identity is visible to all members and account deletion uses a clear Cancel/Delete confirmation without requiring typed text.",
+    "steps": [
+      "Sign in as an ordinary account that has a direct chat with the admin",
+      "Verify ADMIN badge beside the admin in the conversation list and profile",
+      "Open a group containing the admin and inspect Group settings member list",
+      "Sign in as admin and open Admin dashboard",
+      "Choose Delete for a disposable test account and click Cancel",
+      "Verify the account remains in the user list",
+      "Choose Delete again and click the Delete button",
+      "Verify the account is removed and can no longer sign in",
+      "Sign back in as the remaining participant who had a direct chat with the deleted account",
+      "Verify the old direct conversation is labeled User not available",
+      "Open the unavailable conversation and verify the composer and attachment controls are disabled"
+    ],
+    "expected": "The ADMIN badge appears in relevant profile and member views. Cancel leaves the test account unchanged. Confirming Delete permanently removes the disposable account and its related content; any conversations it created are safely reassigned to remaining members or removed if empty. A remaining direct conversation whose other account was deleted is labeled User not available, and messaging, replies, reactions, and attachments are disabled."
+  },
+  {
+    "name": "Lock suspended accounts to logout and block direct messages",
+    "viewport": "mobile",
+    "covers": [
+      "suspended account logout-only screen",
+      "account status polling",
+      "reactivation notice",
+      "direct messages blocked for suspended recipient",
+      "no push notification to suspended recipient"
+    ],
+    "description": "Verifies suspended members see only the logout action, cannot use app navigation, receive a reactivation notice after access is restored, and are excluded from direct-message delivery.",
+    "steps": [
+      "Actor A suspends Actor B from the Admin dashboard",
+      "Actor B's open SquadChat session updates to the account-suspended screen",
+      "Verify Chats, Friends, Profile, search, and messaging controls are unavailable and Log out is the only action",
+      "Actor A attempts to send a direct message to Actor B",
+      "Verify the direct message is rejected and Actor B receives no new-message notification",
+      "Actor A reactivates Actor B",
+      "Actor B signs in again"
+    ],
+    "expected": "Actor B is limited to the suspension screen and logout. Direct messages to the suspended account are blocked and no push notification is delivered. After reactivation, Actor B can sign in and sees a suspension-lifted notice before normal SquadChat access resumes."
+  },
+  {
+    "name": "Confirm signup email without logging into the browser",
+    "viewport": "mobile",
+    "covers": [
+      "signup email confirmation callback",
+      "no browser login session from signup confirmation",
+      "manual return to SquadChat login"
+    ],
+    "description": "Verifies a signup confirmation link displays success, removes one-time URL tokens, and asks the user to return to the app and log in manually.",
+    "steps": [
+      "Open a valid SquadChat signup confirmation link in the browser",
+      "Verify the standalone email-confirmation page appears",
+      "Verify no login form or chat controls are visible behind the notice",
+      "Return to the SquadChat app manually and log in"
+    ],
+    "expected": "The browser shows only the email-verified notice and instructions to return to the app manually. No login form, continue button, or chat screen is displayed."
+  },
+  {
+    "name": "Return to conversation list after every login",
+    "viewport": "mobile",
+    "covers": [
+      "successful login opens conversation list",
+      "clear previously selected conversation",
+      "Chats navigation selected after login"
+    ],
+    "description": "Verifies logging in always starts at the conversation list rather than reopening a previous chat or another mobile section.",
+    "steps": [
+      "Sign in and open an existing conversation",
+      "Log out",
+      "Sign in again with the same account",
+      "Observe the initial screen"
+    ],
+    "expected": "The conversation list is visible, the Chats navigation item is selected, no conversation is selected, and the previous chat is not reopened."
+  },
+  {
+    "name": "Do not show a suspension lock when status verification temporarily fails",
+    "viewport": "mobile",
+    "covers": [
+      "account status check error handling",
+      "temporary network failure does not create false suspension",
+      "active session remains usable during status-check outage"
+    ],
+    "description": "Verifies a temporary account-status endpoint failure does not falsely block an account whose suspension has not been confirmed.",
+    "steps": [
+      "Sign in to an active test account",
+      "Temporarily make the account-status check unavailable while keeping the authenticated session active",
+      "Observe the app screen"
+    ],
+    "expected": "SquadChat does not display the suspended-account lock for a verification error; only an explicit suspended status can activate that lock."
+  },
+  {
+    "name": "Show sender profile photos and open at the latest message",
+    "viewport": "mobile",
+    "covers": [
+      "gallery-uploaded profile photo beside incoming messages",
+      "anime avatar fallback beside incoming messages",
+      "no ME avatar beside own messages",
+      "group sender display names",
+      "open conversation at latest message even when older unread messages exist"
+    ],
+    "description": "Verifies incoming message rows use the sender's saved gallery photo or anime avatar, own messages have no ME avatar, and conversation history opens at the newest message without briefly showing older messages first.",
+    "steps": [
+      "Actor A uploads a profile photo from the device gallery and sends a message to Actor B",
+      "Actor B opens the private conversation and checks the sender avatar",
+      "Actor B sends a reply and checks that no ME avatar appears beside the outgoing message",
+      "Actor A sends two more messages while Actor B is away",
+      "Actor B opens the conversation and verifies the latest message is the first visible bottom position, without a brief jump from older unread messages",
+      "Open a group conversation and inspect the sender name and avatar for incoming messages"
+    ],
+    "expected": "Actor A's uploaded profile photo appears beside incoming messages, outgoing messages have no ME avatar, group messages identify their sender, and every conversation opens directly at the latest message. Older unread messages and the New messages divider remain in the history above it."
+  },
+  {
+    "name": "Resume an active conversation without rebuilding its message list",
+    "viewport": "mobile",
+    "covers": [
+      "conversation visibility resume",
+      "preserve existing message DOM and scroll position",
+      "sync new messages after returning from background",
+      "no duplicate messages after reconnect"
+    ],
+    "description": "Verifies returning to SquadChat after the app was backgrounded reconnects live updates without clearing and rebuilding the open conversation.",
+    "steps": [
+      "Sign in as Actor B and open a conversation",
+      "Scroll to a position above the latest message",
+      "Send a new message to Actor B from Actor A while SquadChat is in the background",
+      "Return to SquadChat",
+      "Observe the existing message history and the new incoming message"
+    ],
+    "expected": "The existing message history remains in place, the new message appears once, the previous scroll position is preserved when the user was not near the bottom, and no duplicate messages are displayed."
+  },
+  {
+    "name": "Keep the New messages divider without moving the initial viewport",
+    "viewport": "mobile",
+    "covers": [
+      "first unread incoming message divider placement",
+      "latest-message initial viewport",
+      "no unread divider when all messages are read"
+    ],
+    "description": "Verifies the unread divider remains attached to the first unread message while the conversation initially opens at the latest message.",
+    "steps": [
+      "Actor A sends several messages while Actor B is away",
+      "Actor B opens the conversation",
+      "Verify the New messages divider appears immediately before the first unread incoming message in the history above the latest message",
+      "Mark all messages as read and reopen the conversation"
+    ],
+    "expected": "The conversation opens at the latest message, while the New messages divider remains immediately before the first unread incoming message farther up the history. After all messages are read, the divider is absent and the conversation still opens at the latest message."
+  },
+  {
+    "name": "Keep short message text on a natural single line",
+    "viewport": "mobile",
+    "covers": [
+      "natural message bubble width",
+      "short text does not wrap vertically",
+      "long text wraps without horizontal overflow"
+    ],
+    "description": "Verifies short messages use compact bubble widths while long messages wrap within the phone viewport.",
+    "steps": [
+      "Open a conversation on a 375px-wide mobile viewport",
+      "Send a short message such as hahaha",
+      "Send a long unbroken message and a multi-line message",
+      "Observe the bubbles and page width"
+    ],
+    "expected": "The short message remains on one line in a compact bubble; long text wraps within the message area and no horizontal page overflow appears."
+  },
+  {
+    "name": "Reply to chatmate messages and show live typing status",
+    "viewport": "mobile",
+    "covers": [
+      "swipe right to reply to incoming messages",
+      "no reply toolbar above composer",
+      "composer expands by one line and returns to one line",
+      "typing indicator uses a shared conversation topic across devices",
+      "conversation preview and ordering update immediately after a new message"
+    ],
+    "description": "Verifies incoming-message replies, compact composer sizing and cross-device typing status.",
+    "steps": [
+      "Actor A and Actor B sign in on separate mobile devices and open the same private conversation",
+      "Actor A sends a message; Actor B swipes that incoming message to the right and sends a reply",
+      "Verify the reply displays the quoted message and no reply preview bar appears above the composer",
+      "Actor B types multiple lines and clears the text; verify the composer grows by only one line and returns to normal height",
+      "Actor A starts typing and Actor B observes Typing.. at the lower-left above the composer",
+      "Actor A sends another message while Actor B is viewing a different conversation or the conversation list",
+      "Actor B returns to the conversation list and checks the preview, timestamp and conversation order"
+    ],
+    "expected": "Incoming messages can be swiped right to reply; the sent reply contains its quoted message without a composer toolbar. The composer grows to at most two lines and shrinks when cleared. The other participant sees Typing.. at the lower-left above the composer while typing and the label disappears when typing stops. Both devices share the same conversation typing channel. A newly sent or received message immediately updates its conversation preview and moves that conversation to the top of the list without waiting for a periodic refresh."
+  },
+  {
+    "name": "Synchronize shared chat background between members",
+    "viewport": "mobile",
+    "covers": [
+      "circular improvements button beside PRIVATE and GROUP labels",
+      "shared solid color, gradient, and uploaded image backgrounds",
+      "background updates synchronized between two members",
+      "background persistence and reset",
+      "conversation-specific background isolation"
+    ],
+    "description": "Verifies either conversation member can change the shared background and both devices show the saved choice.",
+    "steps": [
+      "Actor A and Actor B open the same private conversation on separate devices",
+      "Actor A taps the circular exclamation button beside PRIVATE and selects Change chat background",
+      "Actor A selects a gradient and Actor B observes the update without reopening the chat",
+      "Actor B selects a solid color and Actor A observes the update",
+      "Actor A uploads a supported background image and Actor B observes it",
+      "Actor B reopens the conversation and selects Reset to default",
+      "Actor A verifies the default background returns and another conversation remains unchanged"
+    ],
+    "expected": "The compact button sits beside PRIVATE or GROUP; both members can select solid, gradient, and uploaded image backgrounds; updates synchronize live; settings persist after reopening; reset restores the default; and other conversations are unaffected."
+  },
+  {
+    "name": "Browse shared photos and download original images",
+    "viewport": "mobile",
+    "covers": [
+      "shared photos scoped to the active conversation",
+      "newest-first image order",
+      "sender and timestamp metadata",
+      "full-screen photo navigation",
+      "download original image",
+      "deleted message photos removed from gallery"
+    ],
+    "description": "Verifies conversation members can browse shared images and download an original file without modifying the message attachment.",
+    "steps": [
+      "Actor A and Actor B open the same private conversation",
+      "Actor A sends two photos and Actor B sends one photo",
+      "Actor B opens the exclamation menu beside PRIVATE and selects Shared photos",
+      "Verify the three photos appear newest first with sender and time",
+      "Open a photo, navigate to another, and tap the download icon",
+      "Verify the downloaded original is in device Downloads and the chat attachment remains",
+      "Delete one original photo message and reopen the gallery"
+    ],
+    "expected": "The gallery shows only photos from that conversation, newest first, with sender and time; the viewer supports navigation and downloading the original file; downloads do not change chat messages; and deleted messages no longer appear in the gallery."
+  },
+  {
+    "name": "Confirm image download and require an APK update for older Android versions",
+    "viewport": "mobile",
+    "covers": [
+      "successful native image download notice above the picture",
+      "legacy Android APK update notice above the picture",
+      "modern animated in-viewer download feedback",
+      "browser download fallback remains available"
+    ],
+    "description": "Verifies the latest Android APK confirms a successful Gallery save and older Android WebView builds receive a clear download instruction instead of a misleading download result.",
+    "steps": [
+      "Sign in on an Android device using the latest SquadChat APK and open a conversation with a shared photo",
+      "Open the photo viewer and tap Download",
+      "Verify a modern success notice appears above the picture inside the viewer and says the image was downloaded to Pictures/SquadChat",
+      "Open the same web app in an older SquadChat APK without the native save bridge",
+      "Tap Download on a shared photo"
+    ],
+    "expected": "The latest APK shows 'Downloaded! Saved to Pictures/SquadChat.' only after Android confirms the save. An older Android APK shows an update notice asking the user to install the latest SquadChat app before downloading to Gallery. Non-APK browsers retain their normal browser download or share behavior."
+  },
+  {
+    "name": "Select and send multiple photos from the Android in-app gallery",
+    "viewport": "mobile",
+    "covers": [
+      "Android WebView file chooser opens the custom bottom-sheet gallery",
+      "numbered multi-photo selection in the in-app gallery",
+      "selected content URIs become WebView image files without Base64 batch transfer",
+      "oversized photos are compressed below the upload limit",
+      "selected photo previews stay inside the message composer",
+      "send selected photos together in one message"
+    ],
+    "description": "Verifies the Android gallery selection returns multiple image files to the web composer and the selected images can be uploaded together.",
+    "steps": [
+      "Install the latest SquadChat APK on an Android device and sign in with a configured test account",
+      "Open an existing conversation and tap Photo",
+      "Verify SquadChat's own bottom-sheet gallery appears instead of the Android Files app",
+      "Select at least three photos and verify each receives a selection number",
+      "Tap Send photos in the gallery and verify all selected images appear as composer thumbnails",
+      "Tap Send in the composer and verify one message containing all selected photos appears in the conversation"
+    ],
+    "expected": "The APK opens SquadChat's custom gallery, returns the selected content URIs through the WebView file chooser, displays all selected images in the composer, and sends them together as one image-set message without a large Base64 bridge payload."
+  },
+  {
+    "name": "Display multi-photo messages as a compact selectable album stack",
+    "viewport": "mobile",
+    "covers": [
+      "multiple photos render as one overlapping stack instead of a large grid",
+      "album preview shows total photo count",
+      "tapping the album opens every photo in the viewer",
+      "viewer thumbnails allow direct selection of any photo",
+      "single-photo messages retain their existing inline image behavior"
+    ],
+    "description": "Verifies a multi-photo message uses a compact overlapping stack and opens a viewer where every photo can be selected directly.",
+    "steps": [
+      "Actor A sends four photos together in one message",
+      "Actor B opens the conversation and verifies the message uses one compact overlapping stack with a four-photo count",
+      "Actor B taps the stack and verifies the first photo opens in the full-screen viewer",
+      "Actor B taps the fourth thumbnail and verifies the fourth photo appears",
+      "Actor A sends one photo separately and verifies it remains a normal single-photo message"
+    ],
+    "expected": "The four-photo message occupies one compact stacked preview, the count is visible, tapping opens the full album, thumbnail selection opens the chosen photo, and a separately sent single photo keeps its normal display."
+  },
+  {
+    "name": "Open saved conversations and queue messages while offline",
+    "viewport": "mobile",
+    "covers": [
+      "service worker caches the SquadChat app shell after an online visit",
+      "previously loaded conversations and latest 200 messages are available offline",
+      "offline text messages persist in IndexedDB and display a waiting status",
+      "offline photo selections persist as one queued album",
+      "identical queued photo albums are consolidated before syncing",
+      "recently sent identical photo albums are protected from rapid repeat sends",
+      "a different photo album can still be queued while offline",
+      "queued photo albums immediately show local image previews with a waiting status",
+      "queued messages sync after connectivity returns without duplicate message rows",
+      "queued sends recheck account suspension, peer status, and conversation membership"
+    ],
+    "description": "Verifies a signed-in user can reopen previously cached chats offline, queue text and photo messages, and sync them only after server access is restored.",
+    "steps": [
+      "Sign in while connected and open a conversation containing messages and photos so the app shell and chat history are cached",
+      "Disconnect the device from Wi-Fi and mobile data",
+      "Reopen SquadChat and verify the saved conversation and previously loaded messages are visible",
+      "Send a text message and select multiple photos, then queue the album",
+      "Select the same photos again before reconnecting and verify the app reports that the album is already queued without adding another copy",
+      "Select two different photos while still offline and verify they are saved as a separate second album with local previews",
+      "Before reconnecting, verify both queued albums are visible immediately in the chat with their images and Waiting for connection status",
+      "Reconnect the device and wait for the queued items to sync",
+      "Verify the text message appears once and the photos appear together in one album message"
+    ],
+    "expected": "Previously loaded chats and messages remain visible offline. Text and selected photos are stored locally with a waiting status; each different album appears as its own local preview and syncs after connectivity returns. Duplicate queued albums are consolidated, and a recently sent identical album cannot be accidentally sent repeatedly during the protection window. The account, peer status, and conversation membership checks still apply."
+  },
+  {
+    "name": "Retry offline photo uploads without overwriting existing files",
+    "viewport": "mobile",
+    "covers": [
+      "offline photo retry skips files already uploaded",
+      "retry does not require storage object update permission",
+      "album message is saved after all photo URLs are confirmed",
+      "one queued album produces one durable message after reconnecting"
+    ],
+    "description": "Verifies a retry after a partial upload reuses existing stored photos and completes the album message without attempting an unauthorized object overwrite.",
+    "steps": [
+      "Sign in with a configured test account and open a conversation",
+      "Queue a multi-photo album while offline",
+      "Reconnect after some or all photo objects have already reached storage but the album message has not been saved",
+      "Allow the queue to retry",
+      "Open the same conversation from Actor B's account"
+    ],
+    "expected": "The retry confirms existing photo objects instead of overwriting them, uploads only missing files, saves one album message, and Actor B can see the complete album."
+  },
+  {
+    "name": "Show connection status notices across every screen",
+    "viewport": "mobile",
+    "covers": [
+      "connected notice after login and session restore",
+      "internet-lost notice appears while viewing or typing in a conversation",
+      "connection-restored notice after network returns",
+      "connection notices float above the active screen without entering chat history",
+      "connection notice does not interrupt the message composer"
+    ],
+    "description": "Verifies connection feedback is app-wide, transient, and separate from conversation messages.",
+    "steps": [
+      "Sign in while the device has an internet connection and verify a connected notice appears",
+      "Open a conversation and focus the message composer",
+      "Turn off Wi-Fi and mobile data",
+      "Verify an internet-lost notice appears over the conversation while the composer remains usable",
+      "Turn connectivity back on",
+      "Verify a connection-restored notice appears and no connection notice was added to the conversation history"
+    ],
+    "expected": "The user sees a connected notice after login, an internet-lost notice over the current screen when connectivity drops, and a restored notice when connectivity returns. Notices remain separate from chat messages and do not block typing."
+  },
+  {
+    "name": "Show cached conversations before background refresh completes",
+    "viewport": "mobile",
+    "covers": [
+      "cache-first conversation list",
+      "background Supabase refresh",
+      "preserve saved conversation list during network delay"
+    ],
+    "description": "Verifies a previously cached conversation list is rendered immediately while the server refresh continues.",
+    "steps": [
+      "Sign in with an account that has a previously loaded conversation list",
+      "Return to SquadChat after leaving it in the background",
+      "Observe the conversation list before the network refresh completes"
+    ],
+    "expected": "Previously cached conversations are visible without waiting for the full server query, then their latest previews and unread counts update when fresh data arrives."
+  },
+  {
+    "name": "Open a push-notification conversation before the full chat list loads",
+    "viewport": "mobile",
+    "covers": [
+      "direct notification conversation lookup",
+      "membership-authorized notification navigation",
+      "notification target retained during session restoration"
+    ],
+    "description": "Verifies a notification can open its target conversation even when the in-memory chat list has not finished loading.",
+    "steps": [
+      "Sign in on an Android device with an existing conversation",
+      "Leave SquadChat in the background and receive a message notification",
+      "Tap the notification while the conversation list is not yet populated"
+    ],
+    "expected": "The app resolves the requested conversation through the signed-in user's membership, opens that conversation directly, displays cached messages when available, and clears only that conversation's notification after opening."
+  },
+  {
+    "name": "Resume an active conversation without duplicate messages",
+    "viewport": "mobile",
+    "covers": [
+      "preserve active conversation on app resume",
+      "cache-first message display",
+      "duplicate message prevention",
+      "resume realtime synchronization"
+    ],
+    "description": "Verifies returning to SquadChat keeps the active conversation visible and merges new messages without duplicating cached rows.",
+    "steps": [
+      "Open an existing conversation and load its recent messages",
+      "Leave SquadChat in the background while another participant sends messages",
+      "Return to SquadChat using the app icon"
+    ],
+    "expected": "The same conversation remains open, saved messages remain visible during refresh, new messages appear once, and realtime synchronization resumes without a full blank-screen reload."
+  },
+  {
+    "name": "Inspect admin metrics, account filters and activity history",
+    "viewport": "mobile",
+    "covers": [
+      "admin-only dashboard access",
+      "online and registration statistics",
+      "filter accounts by active or suspended status",
+      "filter accounts by admin or member role",
+      "account registration and last-seen details",
+      "admin audit activity history"
+    ],
+    "description": "Verifies the administrator can review current metrics, filter account records, and inspect recorded account actions without exposing the dashboard to regular users.",
+    "steps": [
+      "Sign in using the existing administrator account",
+      "Open the Admin dashboard from the profile panel",
+      "Verify the dashboard displays online users and new registrations today and this week",
+      "Filter the account list to suspended accounts, then to administrators",
+      "Verify account rows include registration and last-seen information",
+      "Open Admin activity and inspect the latest account actions"
+    ],
+    "expected": "Only the administrator can open the dashboard. The dashboard shows the additional metrics, status and role filters return matching accounts, account rows show registration and last-seen dates, and the activity section displays the latest recorded admin actions."
+  }  ,
+  {
+    "name": "Open admin account details",
+    "viewport": "mobile",
+    "covers": [
+      "admin user details view",
+      "account registration and last-seen information",
+      "message and conversation activity counts",
+      "recent account action history",
+      "admin-only account detail access"
+    ],
+    "description": "Verifies an administrator can open a member's detail panel and review account facts, activity counts and recent account actions.",
+    "steps": [
+      "Sign in using the existing administrator account",
+      "Open the Admin dashboard",
+      "Select View details on a listed account",
+      "Review the account status, joined date, last seen, message count and group counts",
+      "Close the account details panel"
+    ],
+    "expected": "The account detail panel displays the selected user's profile and activity information, then closes without changing the account or dashboard state."
+  },
+  {
+    "name": "Show group membership activity and reaction previews",
+    "viewport": "mobile",
+    "covers": [
+      "group activity message when members are added",
+      "group activity message when a member is removed",
+      "group activity message when a member leaves",
+      "latest reaction preview in private conversations",
+      "latest reaction preview in group conversations",
+      "existing chat and reaction behavior remains available"
+    ],
+    "description": "Verifies group membership changes appear as simple conversation activity messages and reactions to the signed-in user's messages update the conversation preview in both chat types.",
+    "steps": [
+      "Sign in as a group administrator and add another account to a group",
+      "Open the group conversation and verify an activity message identifies the added member",
+      "Remove a different member and verify the removal activity message appears",
+      "Have a group member leave and verify the departure activity message appears for remaining members",
+      "In a private chat, have the other participant react to a message sent by the signed-in user",
+      "Repeat the reaction test in a group chat"
+    ],
+    "expected": "The group timeline shows who was added, removed, or left. The private and group conversation list previews show 'Reacted [emoji] to your message' when another participant reacts to the signed-in user's message, while ordinary messages and reaction chips continue to work."
+  }
+]
