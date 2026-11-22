@@ -45,7 +45,7 @@ import coil.compose.AsyncImage
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.postgrest.result.decodeList
+import io.github.jan.supabase.postgrest.decodeList
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
