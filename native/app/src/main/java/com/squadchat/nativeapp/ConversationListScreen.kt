@@ -68,6 +68,16 @@ private data class MembershipRow(
 )
 
 @Serializable
+private data class ConversationUserRow(
+    @SerialName("user_id") val userId: String
+)
+
+@Serializable
+private data class UnreadMessageRow(
+    @SerialName("sender_id") val senderId: String
+)
+
+@Serializable
 private data class ConversationRow(
     val id: String,
     val title: String? = null,
@@ -150,7 +160,7 @@ fun ConversationListScreen(
                 val members = supabase.postgrest["conversation_members"]
                     .select(columns = Columns.list("user_id")) {
                         filter { eq("conversation_id", conversation.id) }
-                    }.decodeList<MembershipRow>()
+                    }.decodeList<ConversationUserRow>()
 
                 val otherUserId = members.firstOrNull { it.userId != userId }?.userId
                 val otherProfile = if (!conversation.isGroup && otherUserId != null) {
@@ -184,7 +194,7 @@ fun ConversationListScreen(
                             if (readRow != null) gt("created_at", readRow.lastReadAt)
                         }
                         limit(count = 100)
-                    }.decodeList<MessageRow>()
+                    }.decodeList<UnreadMessageRow>()
 
                 val title = if (conversation.isGroup) {
                     conversation.title?.takeIf { it.isNotBlank() } ?: "Group chat"
