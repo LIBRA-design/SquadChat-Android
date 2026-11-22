@@ -2,16 +2,18 @@
 
 ## Production reference and native parity
 
-The current native Android APK UI was reported as messy. Do not continue isolated UI patches without first inspecting the real production web app.
+The current native Android APK UI was reported as messy. The production web source snapshot has now been imported under `reference-web-app/` on this branch. Do not continue isolated UI patches without first inspecting it.
 
 - **Production app:** https://squadchat-ew2b04.v2.appdeploy.ai/
 - **AppDeploy app ID:** `squadchat-ew2b04`
 - **Inspected source snapshot:** `1795353881521` (2026-11-23)
-- **Main application:** `src/main.ts` (4,850 lines)
-- **Design system/styles:** `src/styles.css` (2,226 lines)
-- **Offline queue/cache:** `src/offline.ts`
-- **Backend realtime:** `backend/realtime.ts`, `backend/realtime-subscribers.ts`
-- **Other project files:** `index.html`, `package.json`, `tests/tests.json`, Vite/TypeScript/Tailwind configuration.
+- **Imported source folder:** `reference-web-app/` (14 text/source/config/test files)
+- **Main application:** `reference-web-app/src/main.ts` (4,850 lines)
+- **Design system/styles:** `reference-web-app/src/styles.css` (2,226 lines)
+- **Offline queue/cache:** `reference-web-app/src/offline.ts`
+- **Backend realtime:** `reference-web-app/backend/realtime.ts`, `reference-web-app/backend/realtime-subscribers.ts`
+- **Other imported files:** `reference-web-app/index.html`, `package.json`, `tests/tests.json`, Vite/TypeScript/Tailwind configuration, service worker.
+- **Not imported:** `public/resources/squadchat-icon.png` and `squadchat-logo.png` (binary assets were not available through the source export).
 
 Read the complete current AppDeploy source for the app ID above before rebuilding native screens. The AppDeploy deployment is the source of truth; re-read it if the deployed version has changed.
 
