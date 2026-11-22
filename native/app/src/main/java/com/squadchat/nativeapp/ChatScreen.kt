@@ -22,10 +22,6 @@ import androidx.compose.ui.unit.sp
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.realtime.PostgresAction
-import io.github.jan.supabase.realtime.createChannel
-import io.github.jan.supabase.realtime.postgresChangeFlow
-import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -124,42 +120,12 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
     LaunchedEffect(conversationId) {
         loadMessages()
         markConversationRead()
-        val channel = supabase.realtime.createChannel("native-chat-$conversationId")
-        val messageChanges = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
-            table = "messages"
-            filter = "conversation_id=eq.$conversationId"
-        }
-        val reactionChanges = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
-            table = "message_reactions"
-            filter = "conversation_id=eq.$conversationId"
-        }
-        val readChanges = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
-            table = "conversation_reads"
-            filter = "conversation_id=eq.$conversationId"
-        }
-        val messageJob = launch {
-            messageChanges.collect {
-                loadMessages()
-                markConversationRead()
-            }
-        }
-        val reactionJob = launch { reactionChanges.collect { loadMessages() } }
-        val readJob = launch { readChanges.collect { loadMessages() } }
-        try {
-            supabase.realtime.connect()
-            channel.join(blockUntilJoined = true)
-            // Reconcile messages created between the first history query and subscription.
+        // Poll only while this conversation screen is open. This avoids
+        // relying on SDK-specific Realtime APIs and still keeps chats fresh.
+        while (true) {
+            kotlinx.coroutines.delay(3000)
             loadMessages()
-        } catch (e: Exception) {
-            errorMessage = "Live connection unavailable. Reopen or refresh the chat. " + (e.message ?: "")
-        }
-        try {
-            kotlinx.coroutines.awaitCancellation()
-        } finally {
-            messageJob.cancel()
-            reactionJob.cancel()
-            readJob.cancel()
-            runCatching { supabase.realtime.removeChannel(channel) }
+            markConversationRead()
         }
     }
 
