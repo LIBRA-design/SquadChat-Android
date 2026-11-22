@@ -49,6 +49,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.UUID
+import java.time.Instant
 
 private val Maroon = Color(0xFF430D0C)
 private val DeepMaroon = Color(0xFF170B0D)
@@ -69,6 +70,19 @@ fun SquadChatApp() {
     var activeConversationIsGroup by remember { mutableStateOf(false) }
     var selectedMainTab by remember { mutableStateOf("chats") }
     var logoutMessage by remember { mutableStateOf("") }
+
+    LaunchedEffect(signedInUserId) {
+        if (signedInUserId.isNotBlank()) {
+            while (true) {
+                runCatching {
+                    supabase.postgrest["profiles"].update(buildJsonObject {
+                        put("last_seen_at", Instant.now().toString())
+                    }) { filter { eq("id", signedInUserId) } }
+                }
+                kotlinx.coroutines.delay(60_000)
+            }
+        }
+    }
 
     LaunchedEffect(supabase) {
         supabase.auth.sessionStatus.collect { status ->

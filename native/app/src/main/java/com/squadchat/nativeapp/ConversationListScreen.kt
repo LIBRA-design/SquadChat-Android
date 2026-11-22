@@ -137,7 +137,8 @@ private data class ConversationPreview(
     val avatarText: String,
     val avatarUrl: String?,
     val isGroup: Boolean,
-    val unreadCount: Int
+    val unreadCount: Int,
+    val presenceLabel: String = ""
 )
 
 @Composable
@@ -249,7 +250,8 @@ fun ConversationListScreen(
                     avatarText = avatarText,
                     avatarUrl = if (conversation.isGroup) conversation.groupCoverUrl else otherProfile?.profilePhotoUrl,
                     isGroup = conversation.isGroup,
-                    unreadCount = unreadCountByConversation[id] ?: 0
+                    unreadCount = unreadCountByConversation[id] ?: 0,
+                    presenceLabel = if (conversation.isGroup) "" else formatPresence(otherProfile?.lastSeenAt)
                 )
             }
             conversations = results.sortedByDescending { it.sortTime }
@@ -409,6 +411,9 @@ private fun ConversationRowView(item: ConversationPreview, onClick: () -> Unit) 
                     Text(item.timestamp, color = ListMuted, fontSize = 10.sp)
                 }
             }
+            if (item.presenceLabel.isNotBlank()) {
+                Text(item.presenceLabel, color = if (item.presenceLabel == "Online") ListGold else ListMuted, fontSize = 10.sp)
+            }
             Spacer(Modifier.height(4.dp))
             Text(
                 (if (item.isGroup) "GROUP · " else "") + item.subtitle,
@@ -447,4 +452,18 @@ private fun formatConversationTime(value: String): String {
     } catch (_: Exception) {
         ""
     }
+}
+
+private fun formatPresence(value: String?): String {
+    if (value.isNullOrBlank()) return ""
+    return try {
+        val seen = Instant.parse(value)
+        val minutes = java.time.Duration.between(seen, Instant.now()).toMinutes().coerceAtLeast(0)
+        when {
+            minutes <= 2 -> "Online"
+            minutes < 60 -> "Last seen $minutes min ago"
+            minutes < 1440 -> "Last seen ${minutes / 60} hr ago"
+            else -> "Last seen ${minutes / 1440} d ago"
+        }
+    } catch (_: Exception) { "" }
 }
