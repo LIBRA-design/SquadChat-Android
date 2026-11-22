@@ -59,6 +59,7 @@ fun SquadChatApp() {
     var checkingSession by remember { mutableStateOf(true) }
     var signedIn by remember { mutableStateOf(false) }
     var signedInEmail by remember { mutableStateOf("") }
+    var signedInUserId by remember { mutableStateOf("") }
     var logoutMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(supabase) {
@@ -67,17 +68,20 @@ fun SquadChatApp() {
                 is SessionStatus.Authenticated -> {
                     signedIn = true
                     signedInEmail = status.session.user?.email.orEmpty()
+                    signedInUserId = status.session.user?.id.orEmpty()
                     checkingSession = false
                 }
                 is SessionStatus.NotAuthenticated -> {
                     signedIn = false
                     signedInEmail = ""
+                    signedInUserId = ""
                     checkingSession = false
                 }
                 SessionStatus.Initializing -> checkingSession = true
                 is SessionStatus.RefreshFailure -> {
                     signedIn = false
                     signedInEmail = ""
+                    signedInUserId = ""
                     checkingSession = false
                 }
                 else -> checkingSession = true
@@ -97,9 +101,9 @@ fun SquadChatApp() {
         Surface(modifier = Modifier.fillMaxSize(), color = DeepMaroon) {
             when {
                 checkingSession -> LoadingScreen()
-                signedIn -> SignedInScreen(
+                signedIn -> ConversationListScreen(
+                    userId = signedInUserId,
                     email = signedInEmail,
-                    message = logoutMessage,
                     onSignOut = {
                         scope.launch {
                             runCatching { supabase.auth.signOut() }
