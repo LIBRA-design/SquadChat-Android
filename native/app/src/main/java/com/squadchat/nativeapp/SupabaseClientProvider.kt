@@ -4,7 +4,6 @@ import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.FlowType
 import io.github.jan.supabase.postgrest.Postgrest
-import io.github.jan.supabase.realtime.Realtime
 
 /**
  * Public client configuration only.
@@ -25,6 +24,5 @@ object SupabaseClientProvider {
             autoLoadFromStorage = true
         }
         install(Postgrest)
-        install(Realtime)
     }
 }
