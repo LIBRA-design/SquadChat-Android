@@ -93,9 +93,9 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
             messages = supabase.postgrest["messages"]
                 .select(columns = Columns.list("id", "conversation_id", "sender_id", "content", "created_at")) {
                     filter { eq("conversation_id", conversationId) }
-                    order(column = "created_at", order = Order.ASCENDING)
+                    order(column = "created_at", order = Order.DESCENDING)
                     limit(count = 300)
-                }.decodeList<ChatMessageRow>()
+                }.decodeList<ChatMessageRow>().reversed()
             reactions = supabase.postgrest["message_reactions"]
                 .select(columns = Columns.list("message_id", "conversation_id", "user_id", "emoji")) {
                     filter { eq("conversation_id", conversationId) }
@@ -326,18 +326,22 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                                     }
                                 }
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.padding(top = 2.dp)) {
-                                ChatReactionOptions.forEach { emoji ->
-                                    TextButton(
-                                        onClick = { toggleReaction(message.id, emoji) },
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                                    ) { Text(emoji, fontSize = 14.sp) }
+                            var menuExpanded by remember(message.id) { mutableStateOf(false) }
+                            Box(Modifier.padding(top = 1.dp)) {
+                                TextButton(onClick = { menuExpanded = true }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                                    Text("⋯", color = ChatMuted, fontSize = 18.sp)
                                 }
-                                if (mine) {
-                                    TextButton(
-                                        onClick = { deleteTarget = message },
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                                    ) { Text("Delete", color = Color(0xFFFF8A80), fontSize = 11.sp) }
+                                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                    ChatReactionOptions.forEach { emoji ->
+                                        DropdownMenuItem(text = { Text(emoji) }, onClick = {
+                                            menuExpanded = false
+                                            toggleReaction(message.id, emoji)
+                                        })
+                                    }
+                                    if (mine) DropdownMenuItem(
+                                        text = { Text("Delete message", color = Color(0xFFFF8A80)) },
+                                        onClick = { menuExpanded = false; deleteTarget = message }
+                                    )
                                 }
                             }
                         }
@@ -388,10 +392,11 @@ private fun MessageContent(content: String) {
     } catch (_: Exception) { emptyList() }
     if (urls.isEmpty()) Text(content, color = ChatText, fontSize = 14.sp, lineHeight = 20.sp)
     else if (urls.size == 1) AsyncImage(model = urls.first(), contentDescription = "Photo message", modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp).clip(RoundedCornerShape(12.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-    else Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        urls.chunked(2).forEach { group -> Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            group.forEach { url -> AsyncImage(model = url, contentDescription = "Album photo", modifier = Modifier.weight(1f).height(125.dp).clip(RoundedCornerShape(8.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
-            if (group.size == 1) Spacer(Modifier.weight(1f))
-        } }
+    else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        urls.forEachIndexed { index, url ->
+            Box(Modifier.fillMaxWidth().padding(start = (index * 5).coerceAtMost(20).dp, end = ((urls.lastIndex - index) * 5).coerceAtMost(20).dp)) {
+                AsyncImage(model = url, contentDescription = "Album photo ${index + 1}", modifier = Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(11.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+            }
+        }
     }
 }

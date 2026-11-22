@@ -42,7 +42,8 @@ private data class NativeProfileRow(
     val username: String,
     @SerialName("display_name") val displayName: String? = null,
     val bio: String? = null,
-    @SerialName("profile_photo_url") val profilePhotoUrl: String? = null
+    @SerialName("profile_photo_url") val profilePhotoUrl: String? = null,
+    val role: String? = null
 )
 
 @Composable
@@ -63,7 +64,7 @@ fun ProfileScreen(userId: String, email: String) {
     suspend fun loadProfile() {
         try {
             profile = supabase.postgrest["profiles"]
-                .select(columns = Columns.list("username", "display_name", "bio", "profile_photo_url")) {
+                .select(columns = Columns.list("username", "display_name", "bio", "profile_photo_url", "role")) {
                     filter { eq("id", userId) }
                     limit(count = 1)
                 }.decodeList<NativeProfileRow>().firstOrNull()
@@ -109,6 +110,13 @@ fun ProfileScreen(userId: String, email: String) {
                         Text(current.username.take(1).uppercase(), color = ProfileGold, fontSize = 34.sp,
                             fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 30.dp, vertical = 22.dp))
                     }
+                }
+                if (current.role == "admin") {
+                    Surface(color = ProfileGold.copy(alpha = 0.16f), shape = RoundedCornerShape(20.dp)) {
+                        Text("ADMIN ✓", color = ProfileGold, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                    }
+                    Spacer(Modifier.height(8.dp))
                 }
                 TextButton(onClick = { photoPicker.launch("image/*") }, enabled = !uploading && !saving) {
                     Text("Choose profile photo", color = ProfileGold)

@@ -277,7 +277,7 @@ fun ConversationListScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(ListMaroon)
-                    .padding(horizontal = 18.dp, vertical = 18.dp),
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -291,24 +291,18 @@ fun ConversationListScreen(
                     },
                     enabled = !refreshing
                 ) { Text(if (refreshing) "Loading…" else "Refresh", color = ListGold) }
-                TextButton(onClick = onSignOut) { Text("Log out", color = ListText) }
             }
 
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                Text(
-                    "Your conversations",
-                    color = ListText,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(Modifier.height(10.dp))
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Text("Your conversations", color = ListText, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
                 OutlinedTextField(
-                    value = search,
-                    onValueChange = { search = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    value = search, onValueChange = { search = it },
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
                     singleLine = true,
-                    placeholder = { Text("Search conversations", color = ListMuted) },
-                    shape = RoundedCornerShape(16.dp)
+                    placeholder = { Text("Search conversations", color = ListMuted, fontSize = 13.sp) },
+                    shape = RoundedCornerShape(14.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(color = ListText, fontSize = 14.sp)
                 )
             }
 
