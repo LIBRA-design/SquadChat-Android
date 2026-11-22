@@ -104,6 +104,26 @@ private data class MessageRow(
 )
 
 @Serializable
+private data class ConversationMessageRow(
+    val content: String,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("sender_id") val senderId: String,
+    @SerialName("conversation_id") val conversationId: String
+)
+
+@Serializable
+private data class ConversationReadRow(
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("last_read_at") val lastReadAt: String
+)
+
+@Serializable
+private data class ConversationUnreadRow(
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("created_at") val createdAt: String
+)
+
+@Serializable
 private data class ReadRow(
     @SerialName("last_read_at") val lastReadAt: String
 )
@@ -148,53 +168,66 @@ fun ConversationListScreen(
                 .select(columns = Columns.list("conversation_id", "user_id")) {
                     filter { eq("user_id", userId) }
                 }.decodeList<MembershipRow>()
+            val conversationIds = memberships.map { it.conversationId }.distinct()
+            if (conversationIds.isEmpty()) {
+                conversations = emptyList()
+                return
+            }
 
-            val results = mutableListOf<ConversationPreview>()
-            for (membership in memberships.distinctBy { it.conversationId }) {
-                val conversation = supabase.postgrest["conversations"]
-                    .select(columns = Columns.list("id", "title", "is_group", "created_by", "created_at", "group_cover_url")) {
-                        filter { eq("id", membership.conversationId) }
-                    }.decodeList<ConversationRow>().firstOrNull() ?: continue
+            // Fetch shared conversation data in batches instead of issuing several requests per chat.
+            val conversationRows = supabase.postgrest["conversations"]
+                .select(columns = Columns.list("id", "title", "is_group", "created_by", "created_at", "group_cover_url")) {
+                    filter { isIn("id", conversationIds) }
+                }.decodeList<ConversationRow>()
+            val memberRows = supabase.postgrest["conversation_members"]
+                .select(columns = Columns.list("conversation_id", "user_id")) {
+                    filter { isIn("conversation_id", conversationIds) }
+                }.decodeList<MembershipRow>()
+            val otherUserIds = memberRows.map { it.userId }.filter { it != userId }.distinct()
+            val profiles = if (otherUserIds.isNotEmpty()) {
+                supabase.postgrest["profiles"]
+                    .select(columns = Columns.list("id", "username", "display_name", "avatar_seed", "profile_photo_url", "last_seen_at")) {
+                        filter { isIn("id", otherUserIds) }
+                    }.decodeList<ProfileRow>()
+            } else emptyList()
+            val latestMessages = supabase.postgrest["messages"]
+                .select(columns = Columns.list("content", "created_at", "sender_id", "conversation_id")) {
+                    filter { isIn("conversation_id", conversationIds) }
+                    order(column = "created_at", order = Order.DESCENDING)
+                    limit(count = 2000)
+                }.decodeList<ConversationMessageRow>()
+            val readRows = supabase.postgrest["conversation_reads"]
+                .select(columns = Columns.list("conversation_id", "last_read_at")) {
+                    filter {
+                        isIn("conversation_id", conversationIds)
+                        eq("user_id", userId)
+                    }
+                }.decodeList<ConversationReadRow>()
+            val unreadRows = supabase.postgrest["messages"]
+                .select(columns = Columns.list("conversation_id", "created_at")) {
+                    filter {
+                        isIn("conversation_id", conversationIds)
+                        neq("sender_id", userId)
+                    }
+                    limit(count = 5000)
+                }.decodeList<ConversationUnreadRow>()
 
-                val members = supabase.postgrest["conversation_members"]
-                    .select(columns = Columns.list("user_id")) {
-                        filter { eq("conversation_id", conversation.id) }
-                    }.decodeList<ConversationUserRow>()
+            val profileById = profiles.associateBy { it.id }
+            val conversationById = conversationRows.associateBy { it.id }
+            val membersByConversation = memberRows.groupBy { it.conversationId }
+            val latestByConversation = latestMessages.distinctBy { it.conversationId }.associateBy { it.conversationId }
+            val readByConversation = readRows.associateBy { it.conversationId }
+            val unreadCountByConversation = unreadRows.groupBy { it.conversationId }.mapValues { (id, rows) ->
+                val readAt = readByConversation[id]?.lastReadAt
+                if (readAt == null) rows.size else rows.count { it.createdAt > readAt }
+            }
 
+            val results = conversationIds.mapNotNull { id ->
+                val conversation = conversationById[id] ?: return@mapNotNull null
+                val members = membersByConversation[id].orEmpty()
                 val otherUserId = members.firstOrNull { it.userId != userId }?.userId
-                val otherProfile = if (!conversation.isGroup && otherUserId != null) {
-                    supabase.postgrest["profiles"]
-                        .select(columns = Columns.list("id", "username", "display_name", "avatar_seed", "profile_photo_url", "last_seen_at")) {
-                            filter { eq("id", otherUserId) }
-                        }.decodeList<ProfileRow>().firstOrNull()
-                } else null
-
-                val latestMessage = supabase.postgrest["messages"]
-                    .select(columns = Columns.list("content", "created_at", "sender_id")) {
-                        filter { eq("conversation_id", conversation.id) }
-                        order(column = "created_at", order = Order.DESCENDING)
-                        limit(count = 1)
-                    }.decodeList<MessageRow>().firstOrNull()
-
-                val readRow = supabase.postgrest["conversation_reads"]
-                    .select(columns = Columns.list("last_read_at")) {
-                        filter {
-                            eq("conversation_id", conversation.id)
-                            eq("user_id", userId)
-                        }
-                        limit(count = 1)
-                    }.decodeList<ReadRow>().firstOrNull()
-
-                val unreadQuery = supabase.postgrest["messages"]
-                    .select(columns = Columns.list("sender_id")) {
-                        filter {
-                            eq("conversation_id", conversation.id)
-                            neq("sender_id", userId)
-                            if (readRow != null) gt("created_at", readRow.lastReadAt)
-                        }
-                        limit(count = 100)
-                    }.decodeList<UnreadMessageRow>()
-
+                val otherProfile = otherUserId?.let(profileById::get)
+                val latestMessage = latestByConversation[id]
                 val title = if (conversation.isGroup) {
                     conversation.title?.takeIf { it.isNotBlank() } ?: "Group chat"
                 } else {
@@ -203,14 +236,11 @@ fun ConversationListScreen(
                         ?: "SquadChat member"
                 }
                 val previewText = latestMessage?.content?.takeIf { it.isNotBlank() } ?: "No messages yet"
-                val subtitle = if (conversation.isGroup) {
-                    if (latestMessage == null) "${members.size} members" else previewText
-                } else previewText
+                val subtitle = if (conversation.isGroup && latestMessage == null) "${members.size} members" else previewText
                 val avatarText = title.trim().split(Regex("\\s+"))
                     .take(2).mapNotNull { it.firstOrNull()?.toString() }
                     .joinToString("").ifBlank { "S" }.uppercase()
-
-                results += ConversationPreview(
+                ConversationPreview(
                     id = conversation.id,
                     title = title,
                     subtitle = subtitle,
@@ -219,7 +249,7 @@ fun ConversationListScreen(
                     avatarText = avatarText,
                     avatarUrl = if (conversation.isGroup) conversation.groupCoverUrl else otherProfile?.profilePhotoUrl,
                     isGroup = conversation.isGroup,
-                    unreadCount = unreadQuery.size
+                    unreadCount = unreadCountByConversation[id] ?: 0
                 )
             }
             conversations = results.sortedByDescending { it.sortTime }
