@@ -137,7 +137,7 @@ fun SquadChatApp() {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         when (selectedMainTab) {
                             "profile" -> ProfileScreen(userId = signedInUserId, email = signedInEmail)
-                            "friends" -> FriendsScreen(userId = signedInUserId)
+                            "friends" -> FriendsScreen(userId = signedInUserId, onOpenChat = { id, title, isGroup -> activeConversationId = id; activeConversationTitle = title; activeConversationIsGroup = isGroup })
                             else -> ConversationListScreen(
                                 userId = signedInUserId,
                                 email = signedInEmail,
