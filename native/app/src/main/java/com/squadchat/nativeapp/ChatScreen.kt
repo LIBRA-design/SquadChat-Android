@@ -148,6 +148,17 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
     }
 
     LaunchedEffect(conversationId) {
+        runCatching {
+            val appearance = supabase.postgrest["conversation_appearance"]
+                .select(columns = Columns.list("background_kind", "background_value")) {
+                    filter { eq("conversation_id", conversationId) }
+                }.decodeList<kotlinx.serialization.json.JsonObject>().firstOrNull()
+            val kind = (appearance?.get("background_kind") as? JsonPrimitive)?.content
+            val value = (appearance?.get("background_value") as? JsonPrimitive)?.content
+            if (kind == "solid" && value != null) {
+                runCatching { android.graphics.Color.parseColor(value) }.getOrNull()?.let { chatBackground = Color(it) }
+            } else chatBackground = Color(0xFF170B0D)
+        }
         loadMessages()
         markConversationRead()
         // Poll only while this conversation screen is open. This avoids
