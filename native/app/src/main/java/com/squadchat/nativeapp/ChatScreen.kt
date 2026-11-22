@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.abs
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -47,6 +50,8 @@ private val ChatText = Color(0xFFF5F0E8)
 private val ChatMuted = Color(0xFFBDAEAA)
 private val ChatIncoming = Color(0xFF392426)
 private val ChatReactionOptions = listOf("👍", "❤️", "😂", "😮", "😢")
+private const val NativeReplyMarker = "[[SQUADCHAT_REPLY_V1]]"
+private data class NativePendingReply(val id: String, val senderId: String, val content: String)
 
 @Serializable
 private data class ChatMessageRow(
@@ -81,6 +86,7 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
     var reactions by remember { mutableStateOf<List<ChatReactionRow>>(emptyList()) }
     var readRows by remember { mutableStateOf<List<ChatReadRow>>(emptyList()) }
     var draft by remember { mutableStateOf("") }
+    var pendingReply by remember { mutableStateOf<NativePendingReply?>(null) }
     var selectedPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var sending by remember { mutableStateOf(false) }
@@ -152,12 +158,20 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
             sending = true
             errorMessage = ""
             try {
+                val storedContent = pendingReply?.let { reply ->
+                    NativeReplyMarker + buildJsonObject {
+                        put("id", reply.id)
+                        put("sender_id", reply.senderId)
+                        put("content", reply.content)
+                    }.toString() + "\n" + text
+                } ?: text
                 supabase.postgrest["messages"].insert(buildJsonObject {
                     put("conversation_id", conversationId)
                     put("sender_id", userId)
-                    put("content", text)
+                    put("content", storedContent)
                 })
                 draft = ""
+                pendingReply = null
                 loadMessages()
             } catch (e: Exception) {
                 errorMessage = e.message?.take(180) ?: "Message could not be sent. Check your connection."
@@ -298,12 +312,32 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                         val isRead = mine && readTime != null &&
                             (runCatching { Instant.parse(message.createdAt) }.getOrNull()?.let { !readTime.isBefore(it) } == true)
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                            val decodedReply = remember(message.content) { decodeNativeReply(message.content) }
                             Column(
                                 Modifier.fillMaxWidth(0.82f)
+                                    .pointerInput(message.id) {
+                                        var dragTotal = 0f
+                                        detectHorizontalDragGestures(
+                                            onHorizontalDrag = { change, amount -> dragTotal += amount; change.consume() },
+                                            onDragEnd = {
+                                                if (abs(dragTotal) > 55f) {
+                                                    pendingReply = NativePendingReply(message.id, message.senderId, decodedReply.second)
+                                                }
+                                                dragTotal = 0f
+                                            },
+                                            onDragCancel = { dragTotal = 0f }
+                                        )
+                                    }
                                     .background(if (mine) ChatHeader else ChatIncoming, RoundedCornerShape(17.dp))
                                     .padding(horizontal = 13.dp, vertical = 9.dp)
                             ) {
-                                MessageContent(message.content)
+                                decodedReply.first?.let { quote ->
+                                    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).background(ChatBg.copy(alpha = 0.55f), RoundedCornerShape(8.dp)).padding(8.dp)) {
+                                        Text(if (quote.senderId == userId) "You" else "Reply", color = ChatGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Text(if (quote.content.startsWith("IMG:") || quote.content.startsWith("IMGSET:")) "Photo" else quote.content.take(120), color = ChatMuted, fontSize = 11.sp, maxLines = 2)
+                                    }
+                                }
+                                MessageContent(decodedReply.second)
                                 Spacer(Modifier.height(4.dp))
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                                     Text(formatChatTime(message.createdAt), color = ChatMuted, fontSize = 9.sp)
@@ -348,10 +382,17 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                     }
                 }
             }
-            Row(
-                Modifier.fillMaxWidth().background(ChatHeader).padding(horizontal = 10.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Column(Modifier.fillMaxWidth().background(ChatHeader)) {
+                pendingReply?.let { reply ->
+                    Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(if (reply.senderId == userId) "Replying to your message" else "Replying to message", color = ChatGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(if (reply.content.startsWith("IMG:") || reply.content.startsWith("IMGSET:")) "Photo" else reply.content.take(100), color = ChatMuted, fontSize = 11.sp, maxLines = 1)
+                        }
+                        TextButton(onClick = { pendingReply = null }) { Text("Cancel", color = ChatGold, fontSize = 11.sp) }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { photoPicker.launch("image/*") }, enabled = !sending) { Text("＋", color = ChatGold, fontSize = 21.sp) }
                 Box(Modifier.weight(1f).background(ChatBg, RoundedCornerShape(22.dp)).padding(horizontal = 15.dp, vertical = 12.dp)) {
                     if (draft.isBlank()) Text("Message…", color = ChatMuted, fontSize = 14.sp)
@@ -372,9 +413,23 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                     colors = ButtonDefaults.buttonColors(containerColor = ChatGold, contentColor = ChatBg),
                     shape = RoundedCornerShape(20.dp)
                 ) { Text(if (sending) "…" else if (selectedPhotos.isNotEmpty()) "Send ${selectedPhotos.size}" else "Send", fontWeight = FontWeight.Bold) }
+                }
             }
         }
     }
+}
+
+private fun decodeNativeReply(raw: String): Pair<NativePendingReply?, String> {
+    if (!raw.startsWith(NativeReplyMarker)) return null to raw
+    val newline = raw.indexOf('\n')
+    if (newline < 0) return null to raw
+    return try {
+        val obj = kotlinx.serialization.json.Json.parseToJsonElement(raw.substring(NativeReplyMarker.length, newline)) as kotlinx.serialization.json.JsonObject
+        val id = (obj["id"] as? JsonPrimitive)?.content ?: return null to raw
+        val sender = (obj["sender_id"] as? JsonPrimitive)?.content ?: return null to raw
+        val content = (obj["content"] as? JsonPrimitive)?.content ?: return null to raw
+        NativePendingReply(id, sender, content) to raw.substring(newline + 1)
+    } catch (_: Exception) { null to raw }
 }
 
 private fun formatChatTime(value: String): String = try {
