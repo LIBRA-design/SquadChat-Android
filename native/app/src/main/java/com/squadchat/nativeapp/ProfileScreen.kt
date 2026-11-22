@@ -6,6 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -87,7 +89,7 @@ fun ProfileScreen(userId: String, email: String) {
     LaunchedEffect(userId) { loadProfile() }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(ProfileBg).padding(20.dp),
+        modifier = Modifier.fillMaxSize().background(ProfileBg).verticalScroll(rememberScrollState()).padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("My Profile", color = ProfileGold, fontSize = 26.sp, fontWeight = FontWeight.Bold)

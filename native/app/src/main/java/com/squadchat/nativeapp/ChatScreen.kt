@@ -10,6 +10,10 @@ import kotlinx.serialization.json.JsonPrimitive
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -313,21 +317,33 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                             (runCatching { Instant.parse(message.createdAt) }.getOrNull()?.let { !readTime.isBefore(it) } == true)
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                             val decodedReply = remember(message.content) { decodeNativeReply(message.content) }
+                            var dragOffset by remember(message.id) { mutableFloatStateOf(0f) }
+                            var menuExpanded by remember(message.id) { mutableStateOf(false) }
                             Column(
                                 Modifier.fillMaxWidth(0.82f)
+                                    .graphicsLayer { translationX = dragOffset }
                                     .pointerInput(message.id) {
                                         var dragTotal = 0f
                                         detectHorizontalDragGestures(
-                                            onHorizontalDrag = { change, amount -> dragTotal += amount; change.consume() },
+                                            onHorizontalDrag = { change, amount ->
+                                                dragTotal += amount
+                                                dragOffset = (dragOffset + amount).coerceIn(-150f, 150f)
+                                                change.consume()
+                                            },
                                             onDragEnd = {
                                                 if (abs(dragTotal) > 55f) {
                                                     pendingReply = NativePendingReply(message.id, message.senderId, decodedReply.second)
                                                 }
+                                                dragOffset = 0f
                                                 dragTotal = 0f
                                             },
-                                            onDragCancel = { dragTotal = 0f }
+                                            onDragCancel = { dragOffset = 0f; dragTotal = 0f }
                                         )
                                     }
+                                    .combinedClickable(
+                                        onClick = {},
+                                        onLongClick = { menuExpanded = true }
+                                    )
                                     .background(if (mine) ChatHeader else ChatIncoming, RoundedCornerShape(17.dp))
                                     .padding(horizontal = 13.dp, vertical = 9.dp)
                             ) {
@@ -360,18 +376,25 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                                     }
                                 }
                             }
-                            var menuExpanded by remember(message.id) { mutableStateOf(false) }
                             Box(Modifier.padding(top = 1.dp)) {
                                 TextButton(onClick = { menuExpanded = true }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
                                     Text("⋯", color = ChatMuted, fontSize = 18.sp)
                                 }
                                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                                    ChatReactionOptions.forEach { emoji ->
-                                        DropdownMenuItem(text = { Text(emoji) }, onClick = {
-                                            menuExpanded = false
-                                            toggleReaction(message.id, emoji)
-                                        })
-                                    }
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                ChatReactionOptions.forEach { emoji ->
+                                                    TextButton(
+                                                        onClick = { menuExpanded = false; toggleReaction(message.id, emoji) },
+                                                        contentPadding = PaddingValues(horizontal = 5.dp, vertical = 3.dp),
+                                                        modifier = Modifier.width(42.dp)
+                                                    ) { Text(emoji, fontSize = 20.sp) }
+                                                }
+                                            }
+                                        },
+                                        onClick = {}
+                                    )
                                     if (mine) DropdownMenuItem(
                                         text = { Text("Delete message", color = Color(0xFFFF8A80)) },
                                         onClick = { menuExpanded = false; deleteTarget = message }
@@ -449,8 +472,16 @@ private fun MessageContent(content: String) {
     else if (urls.size == 1) AsyncImage(model = urls.first(), contentDescription = "Photo message", modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp).clip(RoundedCornerShape(12.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
     else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         urls.forEachIndexed { index, url ->
-            Box(Modifier.fillMaxWidth().padding(start = (index * 5).coerceAtMost(20).dp, end = ((urls.lastIndex - index) * 5).coerceAtMost(20).dp)) {
-                AsyncImage(model = url, contentDescription = "Album photo ${index + 1}", modifier = Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(11.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(start = (index * 4).coerceAtMost(16).dp, end = ((urls.lastIndex - index) * 4).coerceAtMost(16).dp),
+                color = Color(0xFF4A3032),
+                shape = RoundedCornerShape(15.dp),
+                shadowElevation = 5.dp
+            ) {
+                Column(Modifier.padding(5.dp)) {
+                    AsyncImage(model = url, contentDescription = "Album photo ${index + 1}", modifier = Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(11.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                    Text("${index + 1} / ${urls.size}", color = ChatMuted, fontSize = 10.sp, modifier = Modifier.align(Alignment.End).padding(top = 3.dp, end = 5.dp))
+                }
             }
         }
     }
