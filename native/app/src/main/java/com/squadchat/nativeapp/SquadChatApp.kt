@@ -63,6 +63,9 @@ fun SquadChatApp() {
     var signedIn by remember { mutableStateOf(false) }
     var signedInEmail by remember { mutableStateOf("") }
     var signedInUserId by remember { mutableStateOf("") }
+    var activeConversationId by remember { mutableStateOf<String?>(null) }
+    var activeConversationTitle by remember { mutableStateOf("") }
+    var activeConversationIsGroup by remember { mutableStateOf(false) }
     var logoutMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(supabase) {
@@ -78,6 +81,7 @@ fun SquadChatApp() {
                     signedIn = false
                     signedInEmail = ""
                     signedInUserId = ""
+                    activeConversationId = null
                     checkingSession = false
                 }
                 SessionStatus.Initializing -> checkingSession = true
@@ -85,6 +89,7 @@ fun SquadChatApp() {
                     signedIn = false
                     signedInEmail = ""
                     signedInUserId = ""
+                    activeConversationId = null
                     checkingSession = false
                 }
                 else -> checkingSession = true
@@ -104,6 +109,13 @@ fun SquadChatApp() {
         Surface(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing), color = DeepMaroon) {
             when {
                 checkingSession -> LoadingScreen()
+                signedIn && activeConversationId != null -> ChatScreen(
+                    userId = signedInUserId,
+                    conversationId = activeConversationId!!,
+                    conversationTitle = activeConversationTitle,
+                    isGroup = activeConversationIsGroup,
+                    onBack = { activeConversationId = null }
+                )
                 signedIn -> ConversationListScreen(
                     userId = signedInUserId,
                     email = signedInEmail,
@@ -112,6 +124,11 @@ fun SquadChatApp() {
                             runCatching { supabase.auth.signOut() }
                                 .onFailure { logoutMessage = "Could not log out. Check your connection and try again." }
                         }
+                    },
+                    onOpenChat = { id, title, isGroup ->
+                        activeConversationId = id
+                        activeConversationTitle = title
+                        activeConversationIsGroup = isGroup
                     }
                 )
                 else -> AuthenticationScreen()
