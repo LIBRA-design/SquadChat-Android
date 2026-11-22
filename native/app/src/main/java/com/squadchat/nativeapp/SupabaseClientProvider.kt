@@ -13,7 +13,7 @@ object SupabaseClientProvider {
 
     val client = createSupabaseClient(
         supabaseUrl = BuildConfig.SUPABASE_URL,
-        supabaseKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY
+        supabaseKey = BuildConfig.SUPABASE_ANON_KEY
     ) {
         install(Auth) {
             flowType = FlowType.PKCE
