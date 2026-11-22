@@ -1,12 +1,14 @@
 package com.squadchat.nativeapp
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,14 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
-import kotlinx.coroutines.delay
+import io.github.jan.supabase.realtime.PostgresAction
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -37,6 +38,7 @@ private val ChatGold = Color(0xFFE0B169)
 private val ChatText = Color(0xFFF5F0E8)
 private val ChatMuted = Color(0xFFBDAEAA)
 private val ChatIncoming = Color(0xFF392426)
+private val ChatReactionOptions = listOf("👍", "❤️", "😂", "😮", "😢")
 
 @Serializable
 private data class ChatMessageRow(
@@ -47,16 +49,33 @@ private data class ChatMessageRow(
     @SerialName("created_at") val createdAt: String
 )
 
+@Serializable
+private data class ChatReactionRow(
+    @SerialName("message_id") val messageId: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("user_id") val userId: String,
+    val emoji: String
+)
+
+@Serializable
+private data class ChatReadRow(
+    @SerialName("user_id") val userId: String,
+    @SerialName("last_read_at") val lastReadAt: String
+)
+
 @Composable
 fun ChatScreen(userId: String, conversationId: String, conversationTitle: String, isGroup: Boolean, onBack: () -> Unit) {
     val supabase = SupabaseClientProvider.client
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var messages by remember { mutableStateOf<List<ChatMessageRow>>(emptyList()) }
+    var reactions by remember { mutableStateOf<List<ChatReactionRow>>(emptyList()) }
+    var readRows by remember { mutableStateOf<List<ChatReadRow>>(emptyList()) }
     var draft by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var sending by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<ChatMessageRow?>(null) }
 
     suspend fun loadMessages() {
         try {
@@ -66,22 +85,80 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                     order(column = "created_at", order = Order.ASCENDING)
                     limit(count = 300)
                 }.decodeList<ChatMessageRow>()
+            reactions = supabase.postgrest["message_reactions"]
+                .select(columns = Columns.list("message_id", "conversation_id", "user_id", "emoji")) {
+                    filter { eq("conversation_id", conversationId) }
+                }.decodeList<ChatReactionRow>()
+            readRows = supabase.postgrest["conversation_reads"]
+                .select(columns = Columns.list("user_id", "last_read_at")) {
+                    filter {
+                        eq("conversation_id", conversationId)
+                        neq("user_id", userId)
+                    }
+                }.decodeList<ChatReadRow>()
             errorMessage = ""
         } catch (e: Exception) {
-            errorMessage = e.message?.take(180) ?: "Could not load messages. Check your connection."
+            errorMessage = e.message?.take(180) ?: "Could not load chat updates. Check your connection."
         } finally {
             loading = false
         }
     }
 
-    LaunchedEffect(conversationId) {
-        loadMessages()
-        // Polling is used until messages are enabled in the Supabase Realtime publication.
-        while (true) {
-            delay(4000)
-            loadMessages()
+    suspend fun markConversationRead() {
+        try {
+            supabase.postgrest["conversation_reads"].upsert(buildJsonObject {
+                put("conversation_id", conversationId)
+                put("user_id", userId)
+                put("last_read_at", Instant.now().toString())
+            }) {
+                onConflict = "conversation_id,user_id"
+            }
+        } catch (_: Exception) {
+            // The chat remains usable if read status cannot be updated while offline.
         }
     }
+
+    LaunchedEffect(conversationId) {
+        loadMessages()
+        markConversationRead()
+        val channel = supabase.channel("native-chat-$conversationId")
+        val messageChanges = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+            table = "messages"
+            filter = "conversation_id=eq.$conversationId"
+        }
+        val reactionChanges = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+            table = "message_reactions"
+            filter = "conversation_id=eq.$conversationId"
+        }
+        val readChanges = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+            table = "conversation_reads"
+            filter = "conversation_id=eq.$conversationId"
+        }
+        val messageJob = launch {
+            messageChanges.collect {
+                loadMessages()
+                markConversationRead()
+            }
+        }
+        val reactionJob = launch { reactionChanges.collect { loadMessages() } }
+        val readJob = launch { readChanges.collect { loadMessages() } }
+        try {
+            channel.subscribe(blockUntilSubscribed = true)
+            // Reconcile messages created between the first history query and subscription.
+            loadMessages()
+        } catch (e: Exception) {
+            errorMessage = "Live connection unavailable. Reopen or refresh the chat. " + (e.message ?: "")
+        }
+        try {
+            kotlinx.coroutines.awaitCancellation()
+        } finally {
+            messageJob.cancel()
+            reactionJob.cancel()
+            readJob.cancel()
+            runCatching { supabase.removeChannel(channel) }
+        }
+    }
+
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
@@ -108,6 +185,73 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
         }
     }
 
+    fun toggleReaction(messageId: String, emoji: String) {
+        scope.launch {
+            try {
+                val existing = supabase.postgrest["message_reactions"]
+                    .select(columns = Columns.list("message_id")) {
+                        filter {
+                            eq("message_id", messageId)
+                            eq("user_id", userId)
+                            eq("emoji", emoji)
+                        }
+                    }.decodeList<kotlinx.serialization.json.JsonObject>()
+                if (existing.isNotEmpty()) {
+                    supabase.postgrest["message_reactions"].delete {
+                        filter {
+                            eq("message_id", messageId)
+                            eq("user_id", userId)
+                            eq("emoji", emoji)
+                        }
+                    }
+                } else {
+                    supabase.postgrest["message_reactions"].insert(buildJsonObject {
+                        put("message_id", messageId)
+                        put("conversation_id", conversationId)
+                        put("user_id", userId)
+                        put("emoji", emoji)
+                    })
+                }
+                loadMessages()
+            } catch (e: Exception) {
+                errorMessage = "Could not update reaction. " + (e.message?.take(140) ?: "")
+            }
+        }
+    }
+
+    fun deleteMessage(message: ChatMessageRow) {
+        scope.launch {
+            try {
+                supabase.postgrest["messages"].delete {
+                    filter {
+                        eq("id", message.id)
+                        eq("conversation_id", conversationId)
+                        eq("sender_id", userId)
+                    }
+                }
+                messages = messages.filterNot { it.id == message.id }
+                reactions = reactions.filterNot { it.messageId == message.id }
+                deleteTarget = null
+            } catch (e: Exception) {
+                errorMessage = "Could not delete this message. " + (e.message?.take(140) ?: "")
+            }
+        }
+    }
+
+    if (deleteTarget != null) {
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("Delete message?") },
+            text = { Text("This will delete your message for everyone in this conversation.") },
+            confirmButton = {
+                TextButton(onClick = { deleteTarget?.let(::deleteMessage) }) {
+                    Text("Delete", color = Color(0xFFFF8A80))
+                }
+            },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Cancel") } }
+        )
+    }
+
     Surface(Modifier.fillMaxSize(), color = ChatBg) {
         Column(Modifier.fillMaxSize()) {
             Row(
@@ -117,7 +261,7 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                 TextButton(onClick = onBack) { Text("‹ Back", color = ChatGold) }
                 Column(Modifier.weight(1f).padding(start = 4.dp)) {
                     Text(conversationTitle, color = ChatText, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                    Text(if (isGroup) "GROUP CHAT" else "PRIVATE CHAT", color = ChatMuted, fontSize = 9.sp, letterSpacing = 2.sp)
+                    Text(if (isGroup) "GROUP CHAT · LIVE" else "PRIVATE CHAT · LIVE", color = ChatMuted, fontSize = 9.sp, letterSpacing = 1.sp)
                 }
                 TextButton(onClick = { scope.launch { loadMessages() } }) { Text("Refresh", color = ChatGold, fontSize = 12.sp) }
             }
@@ -142,7 +286,11 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                 ) {
                     items(messages, key = { it.id }) { message ->
                         val mine = message.senderId == userId
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
+                        val messageReactions = reactions.filter { it.messageId == message.id }
+                        val readTime = readRows.maxOfOrNull { runCatching { Instant.parse(it.lastReadAt) }.getOrNull() ?: Instant.MIN }
+                        val isRead = mine && readTime != null &&
+                            (runCatching { Instant.parse(message.createdAt) }.getOrNull()?.let { !readTime.isBefore(it) } == true)
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                             Column(
                                 Modifier.fillMaxWidth(0.82f)
                                     .background(if (mine) ChatHeader else ChatIncoming, RoundedCornerShape(17.dp))
@@ -150,7 +298,40 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                             ) {
                                 Text(message.content, color = ChatText, fontSize = 14.sp, lineHeight = 20.sp)
                                 Spacer(Modifier.height(4.dp))
-                                Text(formatChatTime(message.createdAt), color = ChatMuted, fontSize = 9.sp, modifier = Modifier.align(Alignment.End))
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                                    Text(formatChatTime(message.createdAt), color = ChatMuted, fontSize = 9.sp)
+                                    if (mine) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(if (isRead) "Read" else "Sent", color = if (isRead) ChatGold else ChatMuted, fontSize = 9.sp)
+                                    }
+                                }
+                            }
+                            if (messageReactions.isNotEmpty()) {
+                                Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    messageReactions.groupBy { it.emoji }.forEach { (emoji, items) ->
+                                        Surface(
+                                            color = if (items.any { it.userId == userId }) ChatGold.copy(alpha = 0.22f) else ChatIncoming,
+                                            shape = RoundedCornerShape(14.dp),
+                                            modifier = Modifier.clickable { toggleReaction(message.id, emoji) }
+                                        ) {
+                                            Text("$emoji ${items.size}", color = ChatText, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                                        }
+                                    }
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.padding(top = 2.dp)) {
+                                ChatReactionOptions.forEach { emoji ->
+                                    TextButton(
+                                        onClick = { toggleReaction(message.id, emoji) },
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                                    ) { Text(emoji, fontSize = 14.sp) }
+                                }
+                                if (mine) {
+                                    TextButton(
+                                        onClick = { deleteTarget = message },
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                                    ) { Text("Delete", color = Color(0xFFFF8A80), fontSize = 11.sp) }
+                                }
                             }
                         }
                     }
