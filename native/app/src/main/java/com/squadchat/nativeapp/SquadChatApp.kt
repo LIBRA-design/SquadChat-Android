@@ -131,14 +131,14 @@ fun SquadChatApp() {
                     conversationId = activeConversationId!!,
                     conversationTitle = activeConversationTitle,
                     isGroup = activeConversationIsGroup,
-                    onBack = { activeConversationId = null }
+                    onBack = { activeConversationId = null; selectedMainTab = "chats" }
                 )
                 signedIn -> Column(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        if (selectedMainTab == "profile") {
-                            ProfileScreen(userId = signedInUserId, email = signedInEmail)
-                        } else {
-                            ConversationListScreen(
+                        when (selectedMainTab) {
+                            "profile" -> ProfileScreen(userId = signedInUserId, email = signedInEmail)
+                            "friends" -> FriendsScreen(userId = signedInUserId)
+                            else -> ConversationListScreen(
                                 userId = signedInUserId,
                                 email = signedInEmail,
                                 onSignOut = {
@@ -156,15 +156,14 @@ fun SquadChatApp() {
                         }
                     }
                     Row(
-                        modifier = Modifier.fillMaxWidth().background(DeepMaroon).padding(horizontal = 20.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().background(Color(0xFF241416)).padding(horizontal = 12.dp, vertical = 7.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = { selectedMainTab = "chats" }) {
-                            Text("Chats", color = if (selectedMainTab == "chats") Gold else Muted, fontWeight = FontWeight.SemiBold)
-                        }
-                        TextButton(onClick = { selectedMainTab = "profile" }) {
-                            Text("Profile", color = if (selectedMainTab == "profile") Gold else Muted, fontWeight = FontWeight.SemiBold)
+                        listOf("chats" to "Chats", "friends" to "Friends", "profile" to "Profile").forEach { (tab, label) ->
+                            TextButton(onClick = { selectedMainTab = tab }) {
+                                Text(label, color = if (selectedMainTab == tab) Gold else Muted, fontWeight = if (selectedMainTab == tab) FontWeight.Bold else FontWeight.Medium)
+                            }
                         }
                     }
                 }
