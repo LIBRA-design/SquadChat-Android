@@ -42,6 +42,9 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.util.UUID
 
 private val Maroon = Color(0xFF430D0C)
 private val DeepMaroon = Color(0xFF170B0D)
@@ -273,12 +276,22 @@ private fun AuthenticationScreen() {
                                     message = ""
                                     try {
                                         if (isSignUp) {
+                                            // The existing database profile trigger requires usernames of 3–20
+                                            // letters, digits, or underscores. Supply one so its fallback
+                                            // (which currently exceeds 20 characters) is not used.
+                                            val generatedUsername = "user_" + UUID.randomUUID()
+                                                .toString()
+                                                .replace("-", "")
+                                                .take(15)
                                             val user = supabase.auth.signUpWith(
                                                 Email,
                                                 redirectUrl = SupabaseClientProvider.AUTH_REDIRECT_URL
                                             ) {
                                                 this.email = cleanEmail
                                                 this.password = password
+                                                data = buildJsonObject {
+                                                    put("username", generatedUsername)
+                                                }
                                             }
                                             isError = false
                                             message = if (user != null) {
