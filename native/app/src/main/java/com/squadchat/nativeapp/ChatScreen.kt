@@ -98,6 +98,11 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
     var sending by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<ChatMessageRow?>(null) }
+    var chatOptionsExpanded by remember { mutableStateOf(false) }
+    var showBackgroundPicker by remember { mutableStateOf(false) }
+    var showSharedPhotos by remember { mutableStateOf(false) }
+    var chatBackground by remember { mutableStateOf(Color(0xFF170B0D)) }
+    val backgroundChoices = listOf("Midnight" to Color(0xFF170D10), "Burgundy" to Color(0xFF35171D), "Charcoal" to Color(0xFF202124), "Forest" to Color(0xFF14251F), "Navy" to Color(0xFF17243A), "Plum" to Color(0xFF2A1B32), "Coffee" to Color(0xFF33231B), "Rose" to Color(0xFF382026))
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { selectedPhotos = it.take(10) }
 
     suspend fun loadMessages() {
@@ -291,6 +296,14 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                     Text(if (isGroup) "GROUP CHAT · LIVE" else "PRIVATE CHAT · LIVE", color = ChatMuted, fontSize = 9.sp, letterSpacing = 1.sp)
                 }
                 TextButton(onClick = { scope.launch { loadMessages() } }) { Text("Refresh", color = ChatGold, fontSize = 12.sp) }
+                Box {
+                    TextButton(onClick = { chatOptionsExpanded = true }) { Text("⋮", color = ChatGold, fontSize = 22.sp) }
+                    DropdownMenu(expanded = chatOptionsExpanded, onDismissRequest = { chatOptionsExpanded = false }) {
+                        DropdownMenuItem(text = { Text("Change chat background") }, onClick = { chatOptionsExpanded = false; showBackgroundPicker = true })
+                        DropdownMenuItem(text = { Text("Shared photos") }, onClick = { chatOptionsExpanded = false; showSharedPhotos = true })
+                        if (isGroup) DropdownMenuItem(text = { Text("Group settings") }, onClick = { chatOptionsExpanded = false; errorMessage = "Group settings are not yet implemented in the native app." })
+                    }
+                }
             }
             if (errorMessage.isNotBlank()) {
                 Text(errorMessage, color = Color(0xFFFFB4AB), fontSize = 12.sp, modifier = Modifier.padding(12.dp))
@@ -307,7 +320,7 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
                     }
                 }
                 else -> LazyColumn(
-                    Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                    Modifier.weight(1f).fillMaxWidth().background(chatBackground).padding(horizontal = 12.dp, vertical = 10.dp),
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
