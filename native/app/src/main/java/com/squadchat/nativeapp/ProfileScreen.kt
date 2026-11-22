@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -87,7 +88,7 @@ fun ProfileScreen(userId: String, email: String) {
                     AsyncImage(
                         model = current.profilePhotoUrl,
                         contentDescription = "Profile photo",
-                        modifier = Modifier.padding(bottom = 18.dp).clip(CircleShape).background(ProfilePanel).then(Modifier),
+                        modifier = Modifier.padding(bottom = 18.dp).size(112.dp).clip(CircleShape).background(ProfilePanel),
                         contentScale = ContentScale.Crop
                     )
                 } else {
