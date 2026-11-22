@@ -51,9 +51,11 @@ private val Muted = Color(0xFFBDAEAA)
 @Composable
 fun SquadChatApp() {
     val supabase = SupabaseClientProvider.client
+    val scope = rememberCoroutineScope()
     var checkingSession by remember { mutableStateOf(true) }
     var signedIn by remember { mutableStateOf(false) }
     var signedInEmail by remember { mutableStateOf("") }
+    var logoutMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(supabase) {
         supabase.auth.sessionStatus.collect { status ->
@@ -93,11 +95,11 @@ fun SquadChatApp() {
                 checkingSession -> LoadingScreen()
                 signedIn -> SignedInScreen(
                     email = signedInEmail,
+                    message = logoutMessage,
                     onSignOut = {
-                        // Sign-out errors are handled by the Auth screen state in the next pass.
-                        // Do not clear local credentials manually; let Supabase revoke the session.
-                        kotlinx.coroutines.GlobalScope.launch {
+                        scope.launch {
                             runCatching { supabase.auth.signOut() }
+                                .onFailure { logoutMessage = "Could not log out. Check your connection and try again." }
                         }
                     }
                 )
@@ -122,7 +124,7 @@ private fun LoadingScreen() {
 }
 
 @Composable
-private fun SignedInScreen(email: String, onSignOut: () -> Unit) {
+private fun SignedInScreen(email: String, message: String, onSignOut: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -151,6 +153,10 @@ private fun SignedInScreen(email: String, onSignOut: () -> Unit) {
                         textAlign = TextAlign.Center,
                         lineHeight = 21.sp
                     )
+                    if (message.isNotBlank()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(message, color = Color(0xFFFFB4AB), textAlign = TextAlign.Center)
+                    }
                     Spacer(Modifier.height(20.dp))
                     Button(
                         onClick = onSignOut,
