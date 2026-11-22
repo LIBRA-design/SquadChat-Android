@@ -23,6 +23,9 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.createChannel
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -121,7 +124,7 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
     LaunchedEffect(conversationId) {
         loadMessages()
         markConversationRead()
-        val channel = supabase.channel("native-chat-$conversationId")
+        val channel = supabase.realtime.createChannel("native-chat-$conversationId")
         val messageChanges = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
             table = "messages"
             filter = "conversation_id=eq.$conversationId"
@@ -143,7 +146,8 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
         val reactionJob = launch { reactionChanges.collect { loadMessages() } }
         val readJob = launch { readChanges.collect { loadMessages() } }
         try {
-            channel.subscribe(blockUntilSubscribed = true)
+            supabase.realtime.connect()
+            channel.join(blockUntilJoined = true)
             // Reconcile messages created between the first history query and subscription.
             loadMessages()
         } catch (e: Exception) {
@@ -155,7 +159,7 @@ fun ChatScreen(userId: String, conversationId: String, conversationTitle: String
             messageJob.cancel()
             reactionJob.cancel()
             readJob.cancel()
-            runCatching { supabase.removeChannel(channel) }
+            runCatching { supabase.realtime.removeChannel(channel) }
         }
     }
 
