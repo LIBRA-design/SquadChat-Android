@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.Arrangement
@@ -80,6 +81,7 @@ private data class ChatReadRow(
     @SerialName("last_read_at") val lastReadAt: String
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatScreen(userId: String, conversationId: String, conversationTitle: String, isGroup: Boolean, onBack: () -> Unit) {
     val supabase = SupabaseClientProvider.client
