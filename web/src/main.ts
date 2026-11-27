@@ -490,13 +490,13 @@ const root = document.querySelector<HTMLDivElement>('#app')!;
 root.innerHTML = `
 <div class="app-shell">
   <header class="topbar" id="appTopbar" hidden>
-    <div class="brand"><div class="brand-mark"><img src="/resources/squadchat-logo.png" alt="SquadChat logo"></div><div><h1>SquadChat</h1><p>Your people, one place.</p><span class="fiery-wordmark">FIERY</span></div></div>
+    <div class="brand"><div class="brand-mark"><img src="./resources/squadchat-logo.svg" alt="SquadChat logo"></div><div><h1>SquadChat</h1><p>Your people, one place.</p><span class="fiery-wordmark">FIERY</span></div></div>
     <div class="top-actions"><span class="pill" id="connectionPill">● Not connected</span></div>
   </header>
   <div id="notice" role="status" aria-live="polite"></div>
   <div id="sessionBoot" class="session-boot" role="status">Loading SquadChat…</div>
   <section id="authScreen" class="auth-wrap" hidden>
-    <div class="auth-head"><div class="brand"><div class="brand-mark"><img src="/resources/squadchat-logo.png" alt="SquadChat logo"></div><div><h1>SquadChat</h1><p>Private chats. Your crew.</p></div></div><h2 id="authHeading">Welcome back</h2><p class="muted" id="authSubtitle">Sign in to catch up with your people.</p></div>
+    <div class="auth-head"><div class="brand"><div class="brand-mark"><img src="./resources/squadchat-logo.svg" alt="SquadChat logo"></div><div><h1>SquadChat</h1><p>Private chats. Your crew.</p></div></div><h2 id="authHeading">Welcome back</h2><p class="muted" id="authSubtitle">Sign in to catch up with your people.</p></div>
     <div class="card">
       <div class="auth-tabs"><button id="loginTab" class="active" type="button">Log in</button><button id="signupTab" type="button">Create account</button></div>
       <form id="authForm" class="stack">
