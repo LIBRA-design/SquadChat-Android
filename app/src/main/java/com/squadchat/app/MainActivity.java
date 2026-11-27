@@ -90,6 +90,7 @@ public class MainActivity extends Activity {
     private TextView errorText;
     private ValueCallback<Uri[]> filePathCallback;
     private boolean pageLoadFailed = false;
+    private String launcherLogoDataUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -238,6 +239,14 @@ public class MainActivity extends Activity {
                 if (!pageLoadFailed) {
                     errorText.setVisibility(View.GONE);
                     webView.setVisibility(View.VISIBLE);
+                    // Keep the two in-app brand marks identical to this APK's launcher icon.
+                    // The hosted web app and its other assets remain unchanged.
+                    String launcherLogo = getLauncherLogoDataUri();
+                    if (!launcherLogo.isEmpty()) {
+                        String script = "(() => { const src = '" + launcherLogo + "'; " +
+                            "document.querySelectorAll('#authScreen .brand-mark img, #appTopbar .brand-mark img').forEach(img => { img.src = src; }); })();";
+                        webView.evaluateJavascript(script, null);
+                    }
                 }
             }
         });
@@ -316,6 +325,32 @@ public class MainActivity extends Activity {
         }
     }
 
+
+    // Build a compact data URI from the exact launcher image packaged in this APK.
+    // Downscaling keeps the WebView injection lightweight while preserving the logo artwork.
+    private String getLauncherLogoDataUri() {
+        if (launcherLogoDataUri != null) return launcherLogoDataUri;
+        Bitmap source = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
+        if (source == null) return "";
+        Bitmap icon = source;
+        int maxDimension = 256;
+        int largest = Math.max(source.getWidth(), source.getHeight());
+        if (largest > maxDimension) {
+            float scale = (float) maxDimension / largest;
+            icon = Bitmap.createScaledBitmap(
+                source,
+                Math.max(1, Math.round(source.getWidth() * scale)),
+                Math.max(1, Math.round(source.getHeight() * scale)),
+                true
+            );
+            source.recycle();
+        }
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        icon.compress(Bitmap.CompressFormat.PNG, 100, output);
+        if (icon != source) icon.recycle();
+        launcherLogoDataUri = "data:image/png;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP);
+        return launcherLogoDataUri;
+    }
 
     private static volatile MainActivity activeActivity;
 
