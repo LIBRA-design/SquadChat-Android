@@ -22,4 +22,30 @@ android {
 dependencies {
     implementation platform('com.google.firebase:firebase-bom:35.1.0')
     implementation 'com.google.firebase:firebase-messaging'
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
+
+// Build the original Vite application and package its output into Android assets.
+// This keeps the entire SquadChat interface inside the APK; no AppDeploy URL is loaded.
+def squadChatWebDir = rootProject.file('web')
+
+tasks.register('installSquadChatWebDependencies', Exec) {
+    workingDir squadChatWebDir
+    commandLine 'npm', 'install', '--no-audit', '--no-fund'
+}
+
+tasks.register('buildSquadChatWeb', Exec) {
+    dependsOn 'installSquadChatWebDependencies'
+    workingDir squadChatWebDir
+    commandLine 'npm', 'run', 'build'
+}
+
+tasks.register('copySquadChatWebAssets', Copy) {
+    dependsOn 'buildSquadChatWeb'
+    from(rootProject.file('web/dist'))
+    into(layout.projectDirectory.dir('src/main/assets'))
+}
+
+tasks.named('preBuild').configure {
+    dependsOn 'copySquadChatWebAssets'
 }

@@ -46,6 +46,8 @@ import android.net.http.SslError;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import androidx.webkit.WebViewAssetLoader;
 import android.webkit.WebResourceError;
 import android.webkit.JsResult;
 import android.webkit.ValueCallback;
@@ -64,8 +66,8 @@ import com.google.firebase.messaging.FirebaseMessaging;
 
 public class MainActivity extends Activity {
 
-    private static final String TRUSTED_HOST = "squadchat-ew2b04.v2.appdeploy.ai";
-    private static final String TRUSTED_URL = "https://" + TRUSTED_HOST + "/";
+    private static final String TRUSTED_HOST = "appassets.androidplatform.net";
+    private static final String TRUSTED_URL = "https://" + TRUSTED_HOST + "/assets/index.html";
 
     private boolean isTrustedSquadChatUrl(String url) {
         if (url == null) return false;
@@ -86,6 +88,7 @@ public class MainActivity extends Activity {
     private Runnable pendingPhotoGallery;
 
     private WebView webView;
+    private WebViewAssetLoader assetLoader;
     private ProgressBar progressBar;
     private TextView errorText;
     private ValueCallback<Uri[]> filePathCallback;
@@ -136,6 +139,10 @@ public class MainActivity extends Activity {
         });
 
         webView = new WebView(this);
+        assetLoader = new WebViewAssetLoader.Builder()
+            .setDomain(TRUSTED_HOST)
+            .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+            .build();
         webView.addJavascriptInterface(new FcmBridge(), "SquadChatNative");
         webView.setVisibility(View.GONE);
 
@@ -158,6 +165,11 @@ public class MainActivity extends Activity {
         }
 
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return assetLoader.shouldInterceptRequest(request.getUrl());
+            }
+
             private boolean openExternalHttpUrl(String url) {
                 if (url == null) return true;
                 try {
