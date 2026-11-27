@@ -4836,7 +4836,7 @@ window.addEventListener('keydown', event => {
 });
 armSquadChatBackGuard();
 
-if ('serviceWorker' in navigator && window.isSecureContext) {
+if (!('SquadChatNative' in window) && 'serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => {
     void navigator.serviceWorker.register('./sw.js').catch(error => console.warn('SquadChat offline app shell registration failed:', error));
   }, { once: true });
