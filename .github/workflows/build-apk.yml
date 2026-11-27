@@ -6,6 +6,9 @@ on:
     branches:
       - main
       - feature/bundled-squadchat-source
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
